@@ -1,8 +1,10 @@
 ---
 title: 'STP 598: Homework 3'
 author: "Antonio Campbell, Sinta Sulistyo, Atta Ullah, Penny Wu"
-date: "2/15/2021"
-output: html_document
+date: "2/22/2021"
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -25,7 +27,6 @@ knitr::opts_chunk$set(echo = FALSE, fig.align='center')
 
 \textbf{We are going to use the used cars data again.Previously, we used the “eye-ball” method to choose k for a kNN fit for mileage predicting price.Use 5-fold cross-validation to choose k. How does your fit compare with the eyeball method?}
 
-
 ```{r, echo = FALSE, cache = TRUE}
 carDat = read.csv("http://www.rob-mcculloch.org/data/susedcars.csv", header = TRUE)
 carDat = carDat[,c("price","mileage", "year")]
@@ -42,14 +43,14 @@ library (kknn)
 source("docv.R") 
 ```
 
-```{r, echo = FALSE, cache = TRUE, results = 'hide'}
+```{r, echo =TRUE, cache = TRUE, results='hide'}
 #get variables we want
 x1 = cbind(carDat$mileage)
 colnames(x1) = c("mileage")
 y = carDat$price
 
 #run cross val several times
-set.seed(20)
+set.seed(99)
 kv = 2:50 #these are the k values (k as in kNN) we will try
 cvmean = rep(0,length(kv)) #will keep average rmse here
 ndocv = 5 #number of CV splits to try
@@ -61,6 +62,7 @@ for(i in 1:ndocv) {
   cvmean = cvmean + cvtemp
   cvmat[,i] = sqrt(cvtemp/n)
 }
+
 cvmean = cvmean/ndocv
 cvmean = sqrt(cvmean/n)
 ```
@@ -73,8 +75,9 @@ cvmean = sqrt(cvmean/n)
 }
 ```
 
-```{r,  echo = FALSE, cache = TRUE}
-kbest = kv[which.min(cvmean)]
+
+```{r,  echo = TRUE, cache = TRUE}
+kbest2 = kbest = kv[which.min(cvmean)]
 cat("the best k is: ",kbest,"\n")
 ```
 ```{r,  echo = FALSE, cache = TRUE}
@@ -87,19 +90,29 @@ cat("the best k is: ",kbest,"\n")
   lines(sort(x1),kfeyeball$fitted,col="blue",lwd=2,cex.lab=2)
 }
 ```
+Comparing our eyeball fit to the one provided by cross validation we see the two are pretty similar, but we favor the model that is more complicated with $k = 20$. The two fit RMSEs follow:
+
+```{r, echo = FALSE}
+kfbest3 = kknn(y~x1,data.frame(x1, y),data.frame(x1), k=kbest,kernel = "rectangular")
+kfeyeball = kknn(y~x1,data.frame(x1, y),data.frame(x1), k=40, kernel = "rectangular")
+k = rmse(kfeyeball$fitted.values,y)
+j = rmse(kfbest3$fitted.values,y)
+kable(cbind(EyeballedK = k, BestK = j))
+```
+We see that as the name suggests, we have the best fit if we use the $k$ chosen through cross validation. 
 
 \textbf{Use kNN with the k you chose using cross-validation to get a prediction for a used car with 100,000 miles on it. Use all the observations as training data to get your prediction (given your choice of k).}
 
-```{r,  echo = FALSE, cache = TRUE}
-near = kknn(y~x1,data.frame(x1, y),data.frame(x1=100000),k=20,kernel = "rectangular")
-cat("knn predicted value: ",near$fitted,"\n")
+```{r,  echo = TRUE, cache = TRUE}
+near3 = kknn(y~x1,data.frame(x1, y),data.frame(x1=100000),k=20,kernel = "rectangular")
+cat("knn predicted value: ",near3$fitted,"\n")
 ```
 
 #2. kNN, Cars Data with Mileage and Year
 
 \textbf{Use kNN to get a prediction for a 2008 car with 75,000 miles on it! Remember to use cross-validation to choose k and scale your x’s !!}
 
-```{r,echo = FALSE, cache = TRUE}
+```{r,echo = TRUE, cache = TRUE}
 #get variables we want
 x2 = cbind(carDat$mileage, carDat$year)
 colnames(x2) = c("mileage","year")
@@ -107,15 +120,15 @@ mmsc=function(x) {return((x-min(x))/(max(x)-min(x)))}
 xs = apply(x2,2,mmsc) #apply scaling function to each column of x
 ```
 
-```{r,echo = FALSE, cache = TRUE}
+```{r,echo = FALSE, cache = TRUE, fig.height=5}
 #plot y vs each x
 par(mfrow=c(1,2)) #two plot frames
 plot(x2[,1],y,xlab="mileage",ylab="price")
 plot(x2[,2],y,xlab="year",ylab="price")
 ```
-```{r,echo = FALSE, cache = TRUE, results = 'hide'}
+
+```{r,echo = TRUE, cache = TRUE, results = 'hide'}
 #run cross val several times
-set.seed(99)
 kv = 2:35 #these are the k values (k as in kNN) we will try
 cvmean = rep(0,length(kv)) #will keep average rmse here
 ndocv = 5 #number of CV splits to try
@@ -131,18 +144,21 @@ cvmean = cvmean/ndocv
 cvmean = sqrt(cvmean/n)
 ```
 
-```{r, echo = FALSE, cache = TRUE}
+```{r, echo = TRUE, cache = TRUE}
 plot(log(1/kv),cvmean,type="n",ylim=range(cvmat),xlab="k",cex.lab=1.5)
 
 for(i in 1:ndocv) lines(log(1/kv),cvmat[,i],col=i,lty=3) #plot each result
 lines(log(1/kv),cvmean,type="b",col="black",lwd=2) #plot average result
 ```
+
 ```{r,  echo = FALSE, cache = TRUE}
 kbest = kv[which.min(cvmean)]
 cat("the best k is: ",kbest,"\n")
 ```
+
+
 ```{r}
-#refit using all the data and k=5
+#refit using all the data and k=26
 ddf = data.frame(y,xs)
 near2 = kknn(y~.,ddf,ddf,k=kbest,kernel = "rectangular")
 lmf = lm(y~.,ddf)
@@ -161,16 +177,37 @@ near = kknn(y~.,ddf,data.frame(mileage=x21s, year=x22s),k=kbest,kernel = "rectan
 cat("knn predicted value: ",near$fitted,"\n")
 ```
 
-
 \textbf{Is your predictive accuracy better using (mileage,year) than it was with just mileage?}
+
+Comparing the RMSEs we have:
+```{r, echo = TRUE }
+kbest2 = kknn(y~x1,data.frame(x1, y),data.frame(x1), k=kbest2,kernel = "rectangular")
+k = rmse(kbest2$fitted.values,y)
+j = rmse(near2$fitted.values,y)
+kable(cbind(Mileage = k, MileageYear = j))
+```
+
+So yes, the predictive accuracy is quite better. 
 
 #3. Choice of Kernel
 \textbf{In our notes examples we used kernel=“rectangular” when calling the R function kknn.So, you can weight the y values at the neighbors equally, or weight the closer ones more heavily. Typically default is equal weights.Using the used cars data and predictors (features!!) (mileage,year) try a weighting option other than uniform.}
+
+We try some of the different weighting methods and report their RMSEs below. 
 
 ```{r knn choice of kernel, echo = FALSE, cache = TRUE}
 ddf = data.frame(y,xs)
 triangular = kknn(y~.,ddf,ddf,k=kbest,kernel = "triangular")
 triweight = kknn(y~.,ddf,ddf,k=kbest,kernel = "triweight")
 optimal = kknn(y~.,ddf,ddf,k=kbest,kernel = "optimal")
+
+a = rmse(y, optimal$fitted.values)
+b = rmse(y, triweight$fitted.values)
+c = rmse(y, optimal$fitted.values)
+d = rmse(y, near2$fitted)
+
+kable(cbind(Triangular = a, Triweight = b, Optimal = c, Normal = d))
 ```
+In this case, we see that tri-weight has the best accuracy among these options. 
+
+
 
