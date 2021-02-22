@@ -50,7 +50,7 @@ y = carDat$price
 
 #run cross val several times
 set.seed(99)
-kv = 2:35 #these are the k values (k as in kNN) we will try
+kv = 2:50 #these are the k values (k as in kNN) we will try
 cvmean = rep(0,length(kv)) #will keep average rmse here
 ndocv = 50 #number of CV splits to try
 n=length(y)
@@ -84,6 +84,15 @@ lines(sort(x1),kfbest$fitted,col="red",lwd=2,cex.lab=2)
 
 kfeyeball = kknn(y~x1,data.frame(x1, y),data.frame(x1=sort(x1)), k=40, kernel = "rectangular")
 lines(sort(x1),kfeyeball$fitted,col="blue",lwd=2,cex.lab=2)
+```
+
+```{r, echo = TRUE, message=FALSE, warning=FALSE, cache = TRUE}
+rmse = function(y,yhat) {return(sqrt(mean((y-yhat)^2)))}
+
+a = rmse(y, kfbest$fitted)  
+b = rmse(y, kfeyeball$fitted)
+
+kable(data.frame(crossval = a,  eyeball= b), caption = "RMSEs")
 ```
 
 \textbf{Use kNN with the k you chose using cross-validation to get a prediction for a used car with 100,000 miles on it. Use all the observations as training data to get your prediction (given your choice of k).}
@@ -161,6 +170,15 @@ cat("knn predicted value: ",near$fitted,"\n")
 
 
 \textbf{Is your predictive accuracy better using (mileage,year) than it was with just mileage?}
+
+```{r, echo = TRUE, message=FALSE, warning=FALSE, cache = TRUE}
+rmse = function(y,yhat) {return(sqrt(mean((y-yhat)^2)))}
+
+c = rmse(y, kfbest$fitted)  
+d = rmse(y, near2$fitted)
+
+kable(data.frame(mileage = c,  mileage_year= d), caption = "RMSEs")
+```
 
 #3. Choice of Kernel
 \textbf{In our notes examples we used kernel=“rectangular” when calling the R function kknn.So, you can weight the y values at the neighbors equally, or weight the closer ones more heavily. Typically default is equal weights.Using the used cars data and predictors (features!!) (mileage,year) try a weighting option other than uniform.}
