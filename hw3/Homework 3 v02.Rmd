@@ -1,0 +1,174 @@
+---
+title: 'STP 598: Homework 3'
+author: "Antonio Campbell, Sinta Sulistyo, Atta Ullah, Penny Wu"
+date: "2/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#=============================================
+## Clear .Rdata
+rm(list=ls())
+
+## Packages
+pkg.list <-c("ggplot2", "reshape2", "knitr","matrixcalc",
+             "rootSolve", "Matrix", "kknn", "Metrics", "pracma")
+
+#install.packages(pkg.list)
+lapply(pkg.list, require, character.only = TRUE)
+
+knitr::opts_chunk$set(echo = FALSE, fig.align='center')
+#=============================================
+```
+
+#1. Using Cross Validation
+
+\textbf{We are going to use the used cars data again.Previously, we used the “eye-ball” method to choose k for a kNN fit for mileage predicting price.Use 5-fold cross-validation to choose k. How does your fit compare with the eyeball method?}
+
+
+```{r, echo = FALSE, cache = TRUE}
+carDat = read.csv("http://www.rob-mcculloch.org/data/susedcars.csv", header = TRUE)
+carDat = carDat[,c("price","mileage", "year")]
+```
+
+```{r, echo = FALSE, cache = TRUE}
+kable(head(carDat))
+```
+
+\textbf{Plot the data and then add the fit using the k you chose using cross-validation and the k you choose by eye-ball.}
+
+```{r, echo = FALSE, cache = TRUE}
+library (kknn)
+source("docv.R") 
+```
+
+```{r, echo = FALSE, cache = TRUE, results = 'hide'}
+#get variables we want
+x1 = cbind(carDat$mileage)
+colnames(x1) = c("mileage")
+y = carDat$price
+
+#run cross val several times
+set.seed(99)
+kv = 2:35 #these are the k values (k as in kNN) we will try
+cvmean = rep(0,length(kv)) #will keep average rmse here
+ndocv = 50 #number of CV splits to try
+n=length(y)
+cvmat = matrix(0,length(kv),ndocv) #keep results for each split
+
+for(i in 1:ndocv) {
+  cvtemp = docvknn(x1,y,kv,nfold=5)
+  cvmean = cvmean + cvtemp
+  cvmat[,i] = sqrt(cvtemp/n)
+}
+cvmean = cvmean/ndocv
+cvmean = sqrt(cvmean/n)
+```
+
+```{r,  echo = FALSE, cache = TRUE}
+plot(log(1/kv),cvmean,type="n",ylim=range(cvmat),xlab="k",cex.lab=1.5)
+
+for(i in 1:ndocv) lines(log(1/kv),cvmat[,i],col=i,lty=3) #plot each result
+lines(log(1/kv),cvmean,type="b",col="black",lwd=2) #plot average result
+```
+
+```{r,  echo = FALSE, cache = TRUE}
+kbest = kv[which.min(cvmean)]
+cat("the best k is: ",kbest,"\n")
+```
+```{r,  echo = FALSE, cache = TRUE}
+plot(x1, y, xlab ="mileage", ylab ="price")
+
+kfbest = kknn(y~x1,data.frame(x1, y),data.frame(x1=sort(x1)), k=kbest,kernel = "rectangular")
+lines(sort(x1),kfbest$fitted,col="red",lwd=2,cex.lab=2)
+
+kfeyeball = kknn(y~x1,data.frame(x1, y),data.frame(x1=sort(x1)), k=40, kernel = "rectangular")
+lines(sort(x1),kfeyeball$fitted,col="blue",lwd=2,cex.lab=2)
+```
+
+\textbf{Use kNN with the k you chose using cross-validation to get a prediction for a used car with 100,000 miles on it. Use all the observations as training data to get your prediction (given your choice of k).}
+
+```{r,  echo = FALSE, cache = TRUE}
+near = kknn(y~x1,data.frame(x1, y),data.frame(x1=100000),k=5,kernel = "rectangular")
+cat("knn predicted value: ",near$fitted,"\n")
+```
+
+#2. kNN, Cars Data with Mileage and Year
+
+\textbf{Use kNN to get a prediction for a 2008 car with 75,000 miles on it! Remember to use cross-validation to choose k and scale your x’s !!}
+
+```{r,echo = FALSE, cache = TRUE}
+#get variables we want
+x2 = cbind(carDat$mileage, carDat$year)
+colnames(x2) = c("mileage","year")
+mmsc=function(x) {return((x-min(x))/(max(x)-min(x)))}
+xs = apply(x2,2,mmsc) #apply scaling function to each column of x
+```
+
+```{r,echo = FALSE, cache = TRUE}
+#plot y vs each x
+par(mfrow=c(1,2)) #two plot frames
+plot(x2[,1],y,xlab="mileage",ylab="price")
+plot(x2[,2],y,xlab="year",ylab="price")
+```
+```{r,echo = FALSE, cache = TRUE, results = 'hide'}
+#run cross val several times
+set.seed(99)
+kv = 2:35 #these are the k values (k as in kNN) we will try
+cvmean = rep(0,length(kv)) #will keep average rmse here
+ndocv = 50 #number of CV splits to try
+n=length(y)
+cvmat = matrix(0,length(kv),ndocv) #keep results for each split
+
+for(i in 1:ndocv) {
+  cvtemp = docvknn(xs,y,kv,nfold=5)
+  cvmean = cvmean + cvtemp
+  cvmat[,i] = sqrt(cvtemp/n)
+}
+cvmean = cvmean/ndocv
+cvmean = sqrt(cvmean/n)
+```
+
+```{r, echo = FALSE, cache = TRUE}
+plot(log(1/kv),cvmean,type="n",ylim=range(cvmat),xlab="k",cex.lab=1.5)
+
+for(i in 1:ndocv) lines(log(1/kv),cvmat[,i],col=i,lty=3) #plot each result
+lines(log(1/kv),cvmean,type="b",col="black",lwd=2) #plot average result
+```
+```{r,  echo = FALSE, cache = TRUE}
+kbest = kv[which.min(cvmean)]
+cat("the best k is: ",kbest,"\n")
+```
+```{r}
+#refit using all the data and k=5
+ddf = data.frame(y,xs)
+near2 = kknn(y~.,ddf,ddf,k=kbest,kernel = "rectangular")
+lmf = lm(y~.,ddf)
+fmat = cbind(y,near2$fitted,lmf$fitted)
+colnames(fmat)=c("y","kNN","linear")
+pairs(fmat)
+print(cor(fmat))
+```
+
+```{r,  echo = FALSE, cache = TRUE}
+#predict price of cars with year = 2008 and mileage = 75,000.
+x21=75000; x22=2008
+x21s = (x21-min(x2[,1]))/(max(x2[,1])-min(x2[,1]))
+x22s = (x22-min(x2[,2]))/(max(x2[,2])-min(x2[,2]))
+near = kknn(y~.,ddf,data.frame(mileage=x21s, year=x22s),k=kbest,kernel = "rectangular")
+cat("knn predicted value: ",near$fitted,"\n")
+```
+
+
+\textbf{Is your predictive accuracy better using (mileage,year) than it was with just mileage?}
+
+#3. Choice of Kernel
+\textbf{In our notes examples we used kernel=“rectangular” when calling the R function kknn.So, you can weight the y values at the neighbors equally, or weight the closer ones more heavily. Typically default is equal weights.Using the used cars data and predictors (features!!) (mileage,year) try a weighting option other than uniform.}
+
+```{r knn choice of kernel, echo = FALSE, cache = TRUE}
+ddf = data.frame(y,xs)
+triangular = kknn(y~.,ddf,ddf,k=kbest,kernel = "triangular")
+triweight = kknn(y~.,ddf,ddf,k=kbest,kernel = "triweight")
+optimal = kknn(y~.,ddf,ddf,k=kbest,kernel = "optimal")
+```
+
