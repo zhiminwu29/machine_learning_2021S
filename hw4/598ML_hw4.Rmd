@@ -50,4 +50,195 @@ $$\hat{w} = \frac{-\lambda\Sigma^{-1}\iota/2}{-2/\iota^{'}\Sigma^{-1}{\iota}} =\
 $\hat w$ is the $w$ such that $Var(w^{'}R) = Var(P)$ is minimized.
 
 
-                
+# Problem 3. Polynomial Regression
+
+A basic idea in nonlinear regression is to use polynomial terms.
+
+With one $x$ variable, this means we consider the models: $$Y_i=\beta_0+\beta_1 x_i+\beta_2 x^2_i+\ldots+\beta_p x^p_i+\epsilon_i.$$
+
+Using the simple used cars data (with $n=1,000$) with $Y$= price and $x$=mileage, find the best choice of $p$. 
+* Use BIC to pick $p$
+* use an out-of-sample criteria to pick $p$
+
+Fit your chosen polynomial mode using all the data and plot the fit on top of the data. Do you like it? Also plot the fits for a $p$ that is “way to big”. What is wrong with it?
+
+
+
+## Solution
+
+###  Impriting libraries and loading dataset
+```{r}
+library(leaps) 
+dpl= FALSE 
+library(ISLR) 
+data_fram  = read.csv("http://www.rob-mcculloch.org/data/usedcars.csv")
+head(data_fram)
+```
+
+We only need the price and mileage and various powers of mileage. We create a new dataset with the first column as the price of the following rest of the columns are the mileage with exponent 1 through 9. 
+
+```{r}
+p = 9
+data_fram2 <- data.frame(matrix(NA,nrow=1000, ncol=10))
+data_fram2[,1:2] <- data_fram[1:1000,c("price", "mileage")]
+for(i in 3:ncol(data_fram2)) data_fram2[,i] <- data_fram2[,2]^(i-1)
+colnames(data_fram2) <- c("price", "mileage", paste("mileage", 2:9,sep = ""))
+head(data_fram2)
+
+```
+## Plot of R-Squared Error
+
+```{r}
+regfit.best = regsubsets(price~., data = data_fram2,  nvmax=19 ,nbest=1,method="exhaustive") 
+regsum = summary(regfit.best)
+regsum$which
+
+print(regsum$which[1:9,])
+
+if(dpl) pdf(file = 'UsedCars_rsq_alldat.pdf',height=10,width=12)
+plot(regsum$rsq,xlab='num var (k)',ylab='R-squared',cex.lab=1.5,type='b',col='blue')
+if(dpl) dev.off()
+
+```
+
+As expected, r-sqaured error is monotonically increasing as the number of variables increase. 
+
+The following function gives the coefficients for any choice of variables. For instance, if we happen to choose the best subset with 5 varaibles, we use
+
+```{r}
+print(regsum$which[1:5,])
+print(coef(regfit.best,3))
+```
+## function to do rmse for $k$ in $1:p$
+
+```{r}
+dovalbest = function(object,newdata,ynm)
+  #object: regsubsets on train
+  #newdata: test data
+  #ynm: name of y in data frame.
+{
+  form = as.formula(object$call[[2]])
+  p=ncol(newdata)-1
+  rmsev = rep(0,p)
+  test.mat = model.matrix(form,newdata)
+  for(k in 1:p) {
+    coefk = coef(object,id=k)
+    xvars = names(coefk)
+    pred = test.mat[,xvars] %*% coefk
+    rmsev[k] = sqrt(mean((newdata[[ynm]]-pred)^2))
+  }
+  return(rmsev)
+}
+
+```
+
+## Do validation approach several times
+
+```{r}
+
+ntry=100
+p=ncol(data_fram2)-1
+resmat = matrix(0,p,ntry) 
+set.seed(18)
+for(i in 1:ntry) {
+  train = sample(1:nrow(data_fram2),floor(nrow(data_fram2)/2))
+  regfit.best=regsubsets(price~.,data=data_fram2[train,],nvmax=19,nbest=1,method="exhaustive")
+  resmat[,i]=dovalbest(regfit.best,data_fram2[-train,],'price')
+}
+
+```
+## Plot results of repeated train/val
+
+```{r}
+mresmat = apply(resmat,1,mean) #average across columns
+if(dpl) pdf(file='usedCars_train-val.pdf',height=10,width=12)
+plot(mresmat,xlab='num vars',ylab='rmse',type='b',col='blue',pch=19,cex.lab=1.5)
+if(dpl) dev.off()
+```
+## Fit using number of vars chosen by train/validation and all the data.
+
+```{r}
+kopt = 3 #optimal k=number of vars: chosen by eye-balling plot
+regfit.best=regsubsets(price~.,data=data_fram2,nvmax=kopt,nbest=1,method="exhaustive")
+xmat = model.matrix(data_fram2$price~.,data_fram2)
+ddf = data.frame(xmat[,-1],price=data_fram2$price) #don't use intercept (-1), and in y=price
+nms = c(names(coef(regfit.best,kopt))[-1],"price")
+ddfsub = ddf[,nms] #drop all vars except those names by the coef at kopt
+thereg = lm(price~.,ddfsub)
+print(summary(thereg))
+```
+
+## BIC
+
+```{r}
+regfit.best=regsubsets(price~.,data=data_fram2,nvmax=9,nbest=1,method="exhaustive")
+if(dpl) pdf(file="bic-best-on-train_usedCars.pdf",height=8,width=7)
+plot(regfit.best) 
+#will plot models ordered by BIC (the default)
+
+for(i in 1:ncol(data_fram2)) abline(v=i,col="red",lty=2) 
+#so you can see which var it is.
+if(dpl) dev.off()
+
+sumreg = summary(regfit.best)
+if(dpl) pdf(file="usedCars-BIC.pdf",height=10,width=12)
+plot(sumreg$bic,xlab="k",ylab="BIC",type='b',col="blue",lwd=2,cex.lab=1.5)
+if(dpl) dev.off()
+```
+## Ploting the model with the best coice of number of variables.
+
+### Using BIC and Cross validation.
+
+By eyeballing we see that the best choice of $p$ for both is 3.
+```{r}
+print(coef(regfit.best,3)) #coefficients for best model with 2 x variables
+```
+Thus the best polynomila would be
+
+$$
+Y_i=\beta_0+\beta_1 x_i+\beta_2x^2_i+\beta_4x^4_i
+$$
+Where 
+$$
+\beta_0 = 7.176771 \times 10^{04} \\
+\beta_1 = -8.152826\times 10^{-01}\\
+\beta_2 = 2.771420\times 10^{-06} \\
+\beta_4 = -8.457424\times 10^{-18}
+$$
+
+We plot this polynomial with data
+```{r}
+fittedmodel = 7.176771e+04 + (-8.152826e-01)*data_fram2$mileage+(2.771420e-06)*data_fram2$mileage2 
++ (-8.457424e-18)*data_fram2$mileage4
+plot(data_fram2$mileage,data_fram2$price)
+par(new=TRUE)
+plot(data_fram2$mileage,fittedmodel,col ="red")
+```
+This looks good except for the mileage from 150000 to 20000 is a bit off. \
+
+### Using a "way to big" $p$. 
+Since in our data frame we have used the maximum degree 9, we will fit a polynomial of degree 9. 
+
+```{r}
+model_with_big_P =  6.265684e+04  + 1.835415e-01*(data_fram2$mileage)
+-3.725474e-05*(data_fram2$mileage2)+8.178492e-10*(data_fram2$mileage3)
+-9.556166e-15*(data_fram2$mileage4)+
+6.534804e-20*(data_fram2$mileage5)-2.535158e-25*(data_fram2$mileage6) 
++ 4.917961e-31*(data_fram2$mileage7) -2.823111e-37*(data_fram2$mileage8)
+-2.254280e-43*(data_fram2$mileage9) 
+plot(data_fram2$mileage, data_fram2$price)
+par(new=TRUE)
+plot(data_fram2$mileage, model_with_big_P,col ="red")
+```
+
+This one is not as good as the previous and slight off for most of the data but does capture the points near the boundary vary well. 
+
+
+
+
+
+
+
+
+
+
