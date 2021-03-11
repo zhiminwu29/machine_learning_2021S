@@ -1,0 +1,173 @@
+---
+title: 'STP 598: Homework 4'
+author: "Antonio Campbell, Sinta Sulistyo, Atta Ullah, Penny Wu"
+date: "3/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#1. Problem 4
+
+```{r}
+cd = read.csv("http://www.rob-mcculloch.org/data/usedcars.csv")
+print(dim(cd))
+head(cd)
+dpl=FALSE
+
+library(glmnet)
+```
+
+```{r}
+#dummy up the categorical variables
+cd$trim=as.factor(cd$trim)
+cd$isOneOwner=as.factor(cd$isOneOwner)
+cd$color=as.factor(cd$color)
+cd$displacement=as.factor(cd$displacement)
+cd$fuel=as.factor(cd$fuel)
+cd$region=as.factor(cd$region)
+cd$soundSystem=as.factor(cd$soundSystem)
+cd$wheelType=as.factor(cd$wheelType)
+
+summary(cd)
+```
+
+```{r}
+## Get the model matrix (x) and log price (y)
+x=model.matrix(log(price)~.,cd)[,-1]
+x=scale(x) #let's scale the data to start with so we an interpret stuff.
+y=log(cd$price)
+print(dim(x))
+print(colnames(x))
+```
+
+```{r}
+## Fit ridge on grid of lambda values.
+gsize=100
+grid=5^seq(10,-2,length=gsize)
+print(grid)
+#note: the default automatically standardizes the x's.
+#note: alpha=0 is ridge, alpha=1 is lasso.
+ridge.mod=glmnet(x,y,alpha=0,lambda=grid,standardize=FALSE)  #I already standardized
+cat('lambda 50: ',ridge.mod$lambda[50],'\n') #print 50th lambda value
+cat('coefficients:\n')
+print(coef(ridge.mod)[,50]) #coefficients for 50th lambda value
+```
+
+```{r}
+## plot coefficients
+cmat = coef(ridge.mod) 
+cmat = cmat[2:nrow(cmat),] #drop intercept
+rgy = range(cmat)
+cpar = log(1/grid)
+#if(dpl) pdf(file='ridge-coefs-alldata.pdf',height=7,width=10)
+#?pdf
+
+plot(range(cpar),rgy,type='n',xlab='log(1/lambda)',ylab='coeficients',cex.lab=1.5)
+for(i in 1:nrow(cmat)) lines(cpar,cmat[i,],col=i+1,type='l')
+#if(dpl) dev.off()
+?dev.off
+```
+
+```{r}
+##  Try Cross validation using cv.glmnet
+set.seed(14)
+cv.out = cv.glmnet(x,y,alpha=0,lambda=grid)
+cmp = log(1/cv.out$lambda)
+
+#if(dpl) pdf(file='Hitters_cv-glmnet.pdf',height=8,width=10)
+plot(cmp,cv.out$cvm,type='b',xlab='cmp = log(1/lambda)',cex.lab=1.5)
+bestlam = cv.out$lambda.min
+bestcmp = log(1/bestlam)
+text(bestcmp,160000,paste('best lambda is: ',round(bestlam,2)),col='red',cex=1.5)
+abline(v=bestcmp,col='red')
+#if(dpl) dev.off()
+```
+
+```{r}
+##get coefficients for best lambda
+bestridgecoef = predict(ridge.mod,s=bestlam,type='coefficients',exact=TRUE)[,1]
+ddf = data.frame(x,y)
+lm.mod = lm(y~.,ddf)
+rgxy = range(c(lm.mod$coeficients,bestridgecoef))
+if(dpl) pdf(file='comp_coefs_lm-ridge.pdf',height=10,width=12)
+plot(lm.mod$coef,bestridgecoef,xlim=rgxy,ylim=rgxy,xlab='linear coefficients',ylab='ridge coefficients')
+abline(0,1,col='red',lty=2)
+abline(v=0,lty=3)
+abline(h=0,lty=3)
+if(dpl) dev.off()
+```
+
+```{r}
+##get fits
+ridge.fit = predict(ridge.mod,s=bestlam,newx=x)
+lm.fit = lm.mod$fitted
+fmat = cbind(y,lm.fit,ridge.fit)
+colnames(fmat) = c('y','linear','ridge')
+if(dpl) pdf(file='pairs_in-sample-fits_lm-ridge.pdf',height=10,width=12)
+pairs(fmat)
+if(dpl) dev.off()
+```
+
+```{r}
+## repeat for lasso (alpha=1)
+lasso.mod=glmnet(x,y,alpha=1,lambda=grid,standardize=FALSE)  #I already standardized
+```
+
+```{r}
+## plot coefficients
+cmat = coef(lasso.mod) 
+cmat = cmat[2:nrow(cmat),] #drop intercept
+rgy = range(cmat)
+cpar = log(1/grid)
+if(dpl) pdf(file='lasso-coefs-alldata.pdf',height=7,width=10)
+plot(range(cpar),rgy,type='n',xlab='log(1/lambda)',ylab='coeficients',cex.lab=1.5)
+for(i in 1:nrow(cmat)) lines(cpar,cmat[i,],col=i+1,type='l')
+if(dpl) dev.off()
+```
+
+```{r}
+##  Try Cross validation using cv.glmnet
+set.seed(14)
+cv.out = cv.glmnet(x,y,alpha=1,lambda=grid)
+cmp = log(1/cv.out$lambda)
+
+if(dpl) pdf(file='Hitters_cv-glmnet-lasso.pdf',height=8,width=10)
+plot(cmp,cv.out$cvm,type='b',xlab='cmp = log(1/lambda)',cex.lab=1.5)
+bestlam = cv.out$lambda.min
+bestcmp = log(1/bestlam)
+text(bestcmp,160000,paste('best lambda is: ',round(bestlam,2)),col='red',cex=1.5)
+abline(v=bestcmp,col='red')
+if(dpl) dev.off()
+```
+
+```{r}
+##get coefficients for best lambda
+bestlassocoef = predict(lasso.mod,s=bestlam,type='coefficients',exact=TRUE)[,1]
+rgxy = 1.1*range(c(lm.mod$coeficients,bestridgecoef,bestlassocoef))
+if(dpl) pdf(file='comp_coefs_lm-ridge-lasso.pdf',height=10,width=12)
+plot(lm.mod$coef,bestridgecoef,xlim=rgxy,ylim=rgxy,xlab='linear coefficients',ylab='ridge-lasso coefficients',col='green',pch=2,cex.lab=1.5)
+points(lm.mod$coef,bestlassocoef,col='blue',pch=19)
+abline(0,1,col='red',lty=2)
+abline(v=0,lty=3)
+abline(h=0,lty=3)
+legend('topleft',legend=c('ridge','lasso'),pch=19,col=c('green','blue'))
+if(dpl) dev.off()
+```
+
+```{r}
+print(bestlassocoef)
+```
+
+```{r}
+##get fits
+lasso.fit = predict(lasso.mod,s=bestlam,newx=x)
+fmat = cbind(y,lm.fit,ridge.fit,lasso.fit)
+colnames(fmat) = c('y','linear','ridge','lasso')
+if(dpl) pdf(file='pairs_in-sample-fits_lm-ridge-lasso.pdf',height=10,width=12)
+pairs(fmat)
+if(dpl) dev.off()
+```
+
