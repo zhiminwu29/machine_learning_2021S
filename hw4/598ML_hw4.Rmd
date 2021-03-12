@@ -24,7 +24,7 @@ knitr::opts_chunk$set(echo = FALSE, fig.align='center')
 #=============================================
 ```
 
-#1. Problem 1. Basic Optimization, MLE for IID Poisson Data
+# 1. Problem 1. Basic Optimization, MLE for IID Poisson Data
 Suppose $y_i$ is a count then a very common model is to assume the Poisson disttribuion: $$P(Y=y \;|\; \lambda) = \frac{e^{-\lambda} \, \lambda^y}{y!}, \; y = 0,1,2,\ldots$$
 Given $Y_i \sim Poisson(\lambda)$ iid, (that is, \(Y_i = y_i\)), what is the MLE of $\lambda$?
 
@@ -36,7 +36,7 @@ Differentiate with respect to lambda and set to zero to maximize: $$\frac{\delta
 The MLE for the parameter of the $poisson$ distribution is the sample mean. 
 
 
-#Problem 2. Constrained Optimization, Minimum Variance Portfolio
+# Problem 2. Constrained Optimization, Minimum Variance Portfolio
 
 Suppose we are considering investing in $p$ stocks where the uncertain return on the $i$th
 stock is denoted by $R_i$, $i=1,2,\dots,p$. Let $R=(R_1,R_2,\dots,R_p)^{'}.$ A portfolio is a given by $w=(w_1,w_2,\dots,w_p)^{'}$ where $w_i$ is the fraction of wealth invested in asset $i$. The $\{w_i\}$
@@ -83,7 +83,7 @@ data_fram2 <- data.frame(matrix(NA,nrow=1000, ncol=10))
 data_fram2[,1:2] <- data_fram[1:1000,c("price", "mileage")]
 for(i in 3:ncol(data_fram2)) data_fram2[,i] <- data_fram2[,2]^(i-1)
 colnames(data_fram2) <- c("price", "mileage", paste("mileage", 2:9,sep = ""))
-head(data_fram2)
+head(data_fram2,3)
 
 ```
 ## Plot of R-Squared Error
@@ -208,8 +208,10 @@ $$
 
 We plot this polynomial with data
 ```{r}
-fittedmodel = 7.176771e+04 + (-8.152826e-01)*data_fram2$mileage+(2.771420e-06)*data_fram2$mileage2 
-+ (-8.457424e-18)*data_fram2$mileage4
+fittedmodel = 7.176771e+04 +(-8.152826e-01)*data_fram2$mileage+
+  (2.771420e-06)*data_fram2$mileage2 + 
+  (-8.457424e-18)*data_fram2$mileage4
+
 plot(data_fram2$mileage,data_fram2$price)
 par(new=TRUE)
 plot(data_fram2$mileage,fittedmodel,col ="red")
@@ -220,12 +222,11 @@ This looks good except for the mileage from 150000 to 20000 is a bit off. \
 Since in our data frame we have used the maximum degree 9, we will fit a polynomial of degree 9. 
 
 ```{r}
-model_with_big_P =  6.265684e+04  + 1.835415e-01*(data_fram2$mileage)
--3.725474e-05*(data_fram2$mileage2)+8.178492e-10*(data_fram2$mileage3)
--9.556166e-15*(data_fram2$mileage4)+
-6.534804e-20*(data_fram2$mileage5)-2.535158e-25*(data_fram2$mileage6) 
-+ 4.917961e-31*(data_fram2$mileage7) -2.823111e-37*(data_fram2$mileage8)
--2.254280e-43*(data_fram2$mileage9) 
+model_with_big_P =  6.265684e+04  + 1.835415e-01*(data_fram2$mileage)-
+  3.725474e-05*(data_fram2$mileage2)+8.178492e-10*(data_fram2$mileage3)-
+  9.556166e-15*(data_fram2$mileage4)+6.534804e-20*(data_fram2$mileage5)-
+  2.535158e-25*(data_fram2$mileage6) + 4.917961e-31*(data_fram2$mileage7)-
+  2.823111e-37*(data_fram2$mileage8)-2.254280e-43*(data_fram2$mileage9) 
 plot(data_fram2$mileage, data_fram2$price)
 par(new=TRUE)
 plot(data_fram2$mileage, model_with_big_P,col ="red")
@@ -234,11 +235,161 @@ plot(data_fram2$mileage, model_with_big_P,col ="red")
 This one is not as good as the previous and slight off for most of the data but does capture the points near the boundary vary well. 
 
 
+# Problem 4.Regularized Regression
 
+Let’s try ridge and LASSO on the car price data.
+The cars data has 20 thousand observations and 11 variables.
+Many of the x variables are categorial so we need to dummy them up.
 
+```{r}
+cd = read.csv("http://www.rob-mcculloch.org/data/usedcars.csv")
+print(dim(cd))
+head(cd)
+library(glmnet)
+```
 
+```{r}
+#dummy up the categorical variables
+cd$trim=as.factor(cd$trim)
+cd$isOneOwner=as.factor(cd$isOneOwner)
+cd$color=as.factor(cd$color)
+cd$displacement=as.factor(cd$displacement)
+cd$fuel=as.factor(cd$fuel)
+cd$region=as.factor(cd$region)
+cd$soundSystem=as.factor(cd$soundSystem)
+cd$wheelType=as.factor(cd$wheelType)
+summary(cd)
+```
 
+```{r}
+## Get the model matrix (x) and log price (y)
+x=model.matrix(log(price)~.,cd)[,-1]
+x=scale(x) #let's scale the data to start with so we an interpret stuff.
+y=log(cd$price)
+print(dim(x))
+print(colnames(x))
+```
 
+# (a). Use the LASSO to relate log of price to the features.
+```{r}
+## do lasso (alpha=1)
+gsize=100
+grid=5^seq(10,-2,length=gsize)
+lasso.mod=glmnet(x,y,alpha=1,lambda=grid,standardize=FALSE)  
+```
 
+```{r}
+## plot coefficients
+cmat = coef(lasso.mod) 
+cmat = cmat[2:nrow(cmat),] #drop intercept
+rgy = range(cmat)
+cpar = log(1/grid)
+plot(range(cpar),rgy,type='n',xlab='log(1/lambda)',ylab='coeficients',cex.lab=1.5)
+for(i in 1:nrow(cmat)) lines(cpar,cmat[i,],col=i+1,type='l')
+```
+It is clearly seen from the graph above, there ar several variables with zero coefficient, and as lambda gets smaller - meaning that the penalty gets lower - the coefficients increase. 
 
+```{r}
+##  Try Cross validation using cv.glmnet
+set.seed(80)
+cv.out = cv.glmnet(x,y,alpha=1,lambda=grid)
+cmp = log(1/cv.out$lambda)
+plot(cmp,cv.out$cvm,type='b',xlab='cmp = log(1/lambda)',cex.lab=1.5)
+bestlam = cv.out$lambda.min
+bestcmp = log(1/bestlam)
+text(bestcmp,160000,paste('best lambda is: ',round(bestlam,2)),col='red',cex=1.5)
+abline(v=bestcmp,col='red')
+```
+```{r}
+print(bestlam)
+```
+Based on the cross validation, the best lambda is 0.04.
 
+```{r}
+##get coefficients for best lambda
+bestlassocoef = predict(lasso.mod,s=bestlam,type='coefficients',exact=TRUE)[,1]
+ddf = data.frame(x,y)
+lm.mod = lm(y~.,ddf)
+rgxy = range(c(lm.mod$coeficients,bestlassocoef))
+plot(lm.mod$coef,bestlassocoef,xlim=rgxy,ylim=rgxy,xlab='linear coefficients',ylab='lasso coefficients')
+abline(0,1,col='red',lty=2)
+abline(v=0,lty=3)
+abline(h=0,lty=3)
+```
+Acknowledging that lambda is relatively small, it is almost similar with linear regression. Hence, the coefficients of lasso and linear regression are very close. 
+
+```{r}
+print(bestlassocoef)
+```
+As shown above, some variables have 0 coefficient, such as trim350, trim 400, trim420.
+
+```{r}
+##get fits
+lasso.fit = predict(lasso.mod,s=bestlam,newx=x)
+lm.fit = lm.mod$fitted
+fmat = cbind(y,lm.fit,lasso.fit)
+colnames(fmat) = c('y','linear','lasso')
+pairs(fmat)
+```
+Comparing the fit between linear and lasso with lambda = 0.04, it is pretty close. 
+
+# (b). Use ridge regression to relate log of price to the features.
+```{r}
+## Fit ridge on grid of lambda values.
+gsize=100
+grid=5^seq(10,-2,length=gsize)
+ridge.mod=glmnet(x,y,alpha=0,lambda=grid,standardize=FALSE)  #I already standardized
+```
+
+```{r}
+## plot coefficients
+cmat = coef(ridge.mod) 
+cmat = cmat[2:nrow(cmat),] #drop intercept
+rgy = range(cmat)
+cpar = log(1/grid)
+plot(range(cpar),rgy,type='n',xlab='log(1/lambda)',ylab='coeficients',cex.lab=1.5)
+for(i in 1:nrow(cmat)) lines(cpar,cmat[i,],col=i+1,type='l')
+```
+The graph shows the coefficient value of each variables as lambda becomes smaller. Most of the variables' coefficient get bigger as the lambda gets smaller. This makes sense since when lambda is small, the penalty is low. 
+
+```{r}
+##  Try Cross validation using cv.glmnet
+set.seed(14)
+cv.out = cv.glmnet(x,y,alpha=0,lambda=grid)
+cmp = log(1/cv.out$lambda)
+plot(cmp,cv.out$cvm,type='b',xlab='cmp = log(1/lambda)',cex.lab=1.5)
+bestlam = cv.out$lambda.min
+bestcmp = log(1/bestlam)
+text(bestcmp,160000,paste('best lambda is: ',round(bestlam,2)),col='red',cex=1.5)
+abline(v=bestcmp,col='red')
+```
+```{r}
+print(bestlam)
+```
+Based on the cross validation, the best lambda for ridge regression is 0.04. 
+
+```{r}
+##get coefficients for best lambda
+bestridgecoef = predict(ridge.mod,s=bestlam,type='coefficients',exact=TRUE)[,1]
+rgxy = 1.1*range(c(lm.mod$coeficients,bestridgecoef,bestlassocoef))
+plot(lm.mod$coef,bestridgecoef,xlim=rgxy,ylim=rgxy,xlab='linear coefficients',ylab='ridge-lasso coefficients',col='green',pch=2,cex.lab=1.5)
+points(lm.mod$coef,bestlassocoef,col='blue',pch=19)
+abline(0,1,col='red',lty=2)
+abline(v=0,lty=3)
+abline(h=0,lty=3)
+legend('topleft',legend=c('ridge','lasso'),pch=19,col=c('green','blue'))
+```
+
+```{r}
+print(bestridgecoef)
+```
+Using ridge regression, there is no variable selection since all of the variables' coefficient is not zero.
+
+```{r}
+##get fits
+ridge.fit = predict(ridge.mod,s=bestlam,newx=x)
+fmat = cbind(y,lm.fit,ridge.fit,lasso.fit)
+colnames(fmat) = c('y','linear','ridge','lasso')
+pairs(fmat)
+```
+The plot above shows the comparison between linear, ridge, and lasso. 
