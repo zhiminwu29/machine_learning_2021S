@@ -1,0 +1,295 @@
+---
+title: 'STP 598: Homework 5'
+author: "Antonio Campbell, Sinta Sulistyo, Atta Ullah, Penny Wu"
+date: "4/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#=============================================
+## Clear .Rdata
+rm(list=ls())
+
+## Packages
+pkg.list <-c("randomForest", "gbm", "rpart", "rpart.plot")
+
+#install.packages(pkg.list)
+lapply(pkg.list, require, character.only = TRUE)
+
+knitr::opts_chunk$set(echo = FALSE, fig.align='center')
+#=============================================
+```
+
+### Problem 1
+
+We upload the used cars data first and then generate a subset of the actual dataset which has only two features price and mileage. We rescale both the features dividing by 1000 and replace price with variable name $y$ and mileage with the variable name $x$.
+
+```{r, echo=TRUE}
+cd1 = read.csv("http://www.rob-mcculloch.org/data/usedcars.csv")
+cd2 = cd1[,c(1,4)];
+cd = cd1[, c(1,4)]/1000;
+names(cd)[names(cd) == "price"] <- "y"
+names(cd)[names(cd) == "mileage"] <- "x"
+```
+
+#### Train, Validation and Test Split
+In order to use the three set approach, we divide the data into three sets, the train set set, the validation set and the test set, as the following:
+```{r, echo = FALSE, cache = TRUE}
+set.seed(1722)
+n=nrow(cd)
+n1=floor(n/2)
+n2=floor(n/4)
+n3=n-n1-n2
+ii = sample(1:n,n)
+cdtrain = cd[ii[1:n1],]
+cdval = cd[ii[n1+1:n2],]
+cdtrainval = rbind(cdtrain,cdval)
+cdtest = cd[ii[n1+n2+1:n3],]
+```
+
+#### Trees
+We fit a big tree on the training data.
+
+```{r, echo = FALSE, cache = TRUE}
+big.tree = rpart(y~x,method="anova",data=cdtrainval,control=rpart.control(minsplit=5, cp = 0.0001))
+nbig = length(unique(big.tree$where))
+cat("size of big tree: ",nbig,"\n")
+```
+
+```{r, echo = FALSE, cache = TRUE}
+plotcp(big.tree)
+```
+
+```{r, echo = FALSE, cache = TRUE}
+# get nice tree from CV results
+iibest = which.min(big.tree$cptable[,"xerror"]) #which has the lowest error
+bestcp=big.tree$cptable[iibest,"CP"]
+bestsize = big.tree$cptable[iibest,"nsplit"]+1
+```
+
+We found best cp and then prune the tree that gives us trees of various sizes.
+We now make prediction on the validation data based on the pruned tree.
+
+```{r, echo = FALSE, cache = TRUE}
+best.tree = prune(big.tree,cp=bestcp)
+nbest = length(unique(best.tree$where))
+cat("size of best tree: ", nbest,"\n")
+```
+```{r, echo = FALSE, cache = TRUE}
+# using rpart.plot
+rpart.plot(best.tree,split.cex=0.9,cex=0.9,type=2,extra=0)
+```
+
+```{r, echo = FALSE, cache = TRUE}
+#get fits
+yhat = predict(best.tree, newdata = cdtest)
+plot(cdtest$y,yhat)
+abline(0,1,col="red",lwd=3)
+```
+
+#### Random Forests
+
+We fit five different random forests to the training data with different numbers of trees. In this case we take $n =100, 200, 300, 400, 500$. Since we only have 1 variable x, so the dimension of x is 1. This means the mtry = 1.
+
+```{r, echo = FALSE, cache = TRUE}
+rffit1 = randomForest(y ~ x, data = cdtrain, mtry = 1, ntree = 100)
+rffit2 = randomForest(y ~ x, data = cdtrain, mtry = 1, ntree = 200)
+rffit3 = randomForest(y ~ x, data = cdtrain, mtry = 1, ntree = 300)
+rffit4 = randomForest(y ~ x, data = cdtrain, mtry = 1, ntree = 400)
+rffit5 = randomForest(y ~ x, data = cdtrain, mtry = 1, ntree = 500)
+```
+
+Now use all these fitted models to predict over the validation data.
+```{r, echo = FALSE, cache = TRUE}}
+rfvalpred1 = predict(rffit1, newdata = cdval)
+rfvalpred2 = predict(rffit2, newdata = cdval)
+rfvalpred3 = predict(rffit3, newdata = cdval)
+rfvalpred4 = predict(rffit4, newdata = cdval)
+rfvalpred5 = predict(rffit5, newdata = cdval)
+```
+
+Calculating the RMSE of each model. 
+
+```{r, echo = FALSE, cache = TRUE}
+rmse1 = sqrt(mean((cdval$y-rfvalpred1)^2))
+rmse2 = sqrt(mean((cdval$y-rfvalpred2)^2))
+rmse3 = sqrt(mean((cdval$y-rfvalpred3)^2))
+rmse4 = sqrt(mean((cdval$y-rfvalpred4)^2))
+rmse5 = sqrt(mean((cdval$y-rfvalpred5)^2))
+
+ntree = c(100,200,300, 400, 500)
+rmse_of_RF = c(rmse1, rmse2, rmse3, rmse4, rmse5)
+plot(ntree,rmse_of_RF)
+```
+
+We see that $300$ trees give us lowest root mean squared error on the validation dataset.
+We now refit a random forest using $300$ trees on the union of the train and validation data and then later measure the accuracy over the test data.
+
+```{r, echo = FALSE, cache = TRUE}
+rffit6 = randomForest(y ~ x, data = cdtrainval, mtry = 1, ntree =300)
+rfvalpred6 = predict(rffit6, newdata = cdtest)
+rmse6 = sqrt(mean((cdtest$y-rfvalpred6)^2))
+print(rmse6)
+```
+We successfully used the random forest to predict the price of used cars using mileage as the prediction variable.
+
+#### Boosting
+We now using Boosting to fit the relate the price and the mileage. We use 8 different  combinations of parameters to fit the models on the test date and chose the one that gives best prediction on the validation data. The eight combinations are the following:
+##### Maximum depth of 4 with 1000 trees and $\lambda = 0.2$
+##### Maximum depth of 4 with 1000 trees and $\lambda = 0.001$
+##### Maximum depth of 4 with 5000 trees and $\lambda = 0.2$
+##### Maximum depth of 4 with 5000 trees and $\lambda = 0.001$
+##### Maximum depth of 10 with 1000 trees and $\lambda = 0.2$
+##### Maximum depth of 10 with 1000 trees and $\lambda = 0.0.001$
+##### Maximum depth of 10 with 5000 trees and $\lambda = 0.2$
+##### Maximum depth of 10 with 5000 trees and $\lambda = 0.001$
+
+```{r, echo = FALSE, cache = TRUE}
+boostfit1 = gbm(y~x,data = cdtrain,distribution="gaussian",
+interaction.depth = 4, n.trees = 1000,shrinkage = 0.2)
+boostfit2 = gbm(y~x,data=cdtrain,distribution = "gaussian",
+interaction.depth = 4, n.trees = 1000,shrinkage = 0.001)
+boostfit3 = gbm(y~x,data=cdtrain,distribution = "gaussian",
+interaction.depth =4, n.trees = 5000,shrinkage = 0.2)
+boostfit4 = gbm(y~x,data=cdtrain,distribution = "gaussian",
+interaction.depth=4, n.trees = 5000,shrinkage = 0.001)
+boostfit5 = gbm(y~x,data=cdtrain,distribution="gaussian",
+interaction.depth = 10, n.trees = 1000,shrinkage = 0.2)
+boostfit6 = gbm(y~x,data=cdtrain,distribution = "gaussian",
+interaction.depth = 10, n.trees = 1000,shrinkage = 0.001)
+boostfit7 = gbm(y~x,data=cdtrain,distribution = "gaussian",
+interaction.depth = 10, n.trees = 5000,shrinkage = 0.2)
+boostfit8 = gbm(y~x,data=cdtrain,distribution = "gaussian",
+interaction.depth = 10, n.trees = 5000,shrinkage = 0.001)
+```
+
+We now make prediction on the validation data based on each fit and calculate the RMSE.
+
+```{r, echo = FALSE, cache = TRUE}
+boostvalpred1 = predict(boostfit1, newdata = cdval, n.trees = 1000)
+boostvalpred2 = predict(boostfit2, newdata = cdval, n.trees = 1000)
+boostvalpred3 = predict(boostfit3, newdata = cdval, n.trees = 5000)
+boostvalpred4 = predict(boostfit4, newdata = cdval, n.trees = 5000)
+boostvalpred5 = predict(boostfit5, newdata = cdval, n.trees = 1000)
+boostvalpred6 = predict(boostfit6, newdata = cdval, n.trees = 1000)
+boostvalpred7 = predict(boostfit7, newdata = cdval, n.trees = 5000)
+boostvalpred8 = predict(boostfit8, newdata = cdval, n.trees = 5000)
+```
+
+```{r, echo = FALSE, cache = TRUE}
+rmseb1 = sqrt(mean((cdval$y - boostvalpred1)^2))
+rmseb2 = sqrt(mean((cdval$y - boostvalpred2)^2))
+rmseb3 = sqrt(mean((cdval$y - boostvalpred3)^2))
+rmseb4 = sqrt(mean((cdval$y - boostvalpred4)^2))
+rmseb5 = sqrt(mean((cdval$y - boostvalpred5)^2))
+rmseb6 = sqrt(mean((cdval$y - boostvalpred6)^2))
+rmseb7 = sqrt(mean((cdval$y - boostvalpred7)^2))
+rmseb8 = sqrt(mean((cdval$y - boostvalpred8)^2))
+```
+
+```{r, echo = FALSE, cache = TRUE}
+p = c(1:8)
+rmseb = c(rmseb1,rmseb2,rmseb3,rmseb4,rmseb5,rmseb6,rmseb7,rmseb8)
+plot(p,rmseb)
+```
+We see that the minimum root mean squared corresponds to the combination 4 which corresponds to the fourth model where we used $5000$ trees with depth 4 and $\alpha = 0.001$.
+We now use boosting again on the union of training and validation data and predict on the test data with $5000$ trees with depth $4$ and $\alpha = 0.001$.
+
+```{r, echo = FALSE, cache = TRUE}
+boostfit = gbm(y~x,data = cdtrainval ,distribution="gaussian",
+interaction.depth = 4, n.trees = 5000,shrinkage = 0.001)
+boostvalpred = predict(boostfit, newdata = cdtest, n.trees = 5000)
+rmseb = sqrt(mean((cdtest$y - boostvalpred)^2))
+print(rmseb)
+```
+
+We successfully used the boosting to predict the price of used cars using mileage as the prediction variable.
+
+
+### Problem 3
+
+Use a neural nets to relate $y$ = price to $x$ = mileage.
+Use the three set approach, that is, split your data into train, validation, test set.
+Plot your results. 
+
+#### Solution:
+
+We first re-extract a subset of the dataset with only two columns, containing price and mileage and then rescale the price as can be seen in the following:
+
+```{r, echo = FALSE, cache = TRUE}
+library(nnet)
+```
+
+```{r, echo = FALSE, cache = TRUE}
+summary(cd2$mileage)
+cd2[[2]] = (cd2$mileage-min(cd2$mileage))/(max(cd2$mileage)-min(cd2$mileage))
+summary(cd2)
+```
+#### Train, Validation and Test Split 
+
+```{r, echo = FALSE, cache = TRUE}
+set.seed(222)
+n = nrow(cd2)
+n1 = floor(n/2)
+n2 = floor(n/4)
+n3 = n-n1-n2
+ii = sample(1:n,n)
+cdtrain_nn = cd2[ii[1:n1],]
+cdval_nn = cd2[ii[n1+1:n2],]
+cdtrainval_nn = rbind(cdtrain_nn,cdval_nn)
+cdtest_nn = cd2[ii[n1+n2+1:n3],]
+```
+
+#### Different fits with differen size and decay parameters:
+
+Now we fit different single layer neural nets on the training data with size $=$ 25, and 75 and decay $=$ 0.5 and 0.01. We use the size 25 and 75 since the number of the hidden units is usually in the range of 5-100.
+```{r, echo = FALSE, cache = TRUE}
+nn_fit1 = nnet(price ~ mileage, cdtrain_nn, size = 25, decay = 0.5, linout=T)
+nn_fit2 = nnet(price ~ mileage, cdtrain_nn, size = 25, decay= 0.01, linout=T)
+nn_fit3 = nnet(price ~ mileage, cdtrain_nn, size = 75, decay = 0.5, linout=T)
+nn_fit4 = nnet(price ~ mileage, cdtrain_nn, size  = 75, decay = 0.01, linout = T)
+```
+#### Predictions on the Validation set:
+
+```{r, echo = FALSE, cache = TRUE}
+temp1 = data.frame(price = cdval_nn$price, mileage = cdval_nn$mileage)
+nn_predict1 = predict(nn_fit1, temp1)
+nn_predict2 = predict(nn_fit2, temp1)
+nn_predict3 = predict(nn_fit3, temp1)
+nn_predict4 = predict(nn_fit4, temp1)
+```
+
+We now calculate the loss function for each prediction. 
+```{r, echo = FALSE, cache = TRUE}
+nn_loss1 = sqrt(mean((cdval_nn$price - nn_predict1)^2))
+nn_loss2 = sqrt(mean((cdval_nn$price - nn_predict2)^2))
+nn_loss3 = sqrt(mean((cdval_nn$price - nn_predict3)^2))
+nn_loss4 = sqrt(mean((cdval_nn$price - nn_predict4)^2))
+```
+
+```{r, echo = FALSE, cache = TRUE}
+p = c(1:4)
+nn_rmse = c(nn_loss1, nn_loss2, nn_loss3, nn_loss4)
+plot(p,nn_rmse, col = "blue", lwd = 5)
+which.min(nn_rmse)
+```
+Thus the root mean squared error corresponding to the third fit is minimum of the four which has size = 75 and decay = 0.5.
+
+#### Fit on the union of Train and Validation data:
+We now fit a single layer neural net with size = 75 and decay = 0.5 on the train validation set and the predict on the test data.
+```{r, echo = FALSE, cache = TRUE}
+nn_fit6 = nnet(price ~ mileage, cdtrainval_nn, size = 75, decay = 0.5, linout=T)
+temp2 = data.frame(price = cdtest_nn$price, mileage = cdtest_nn$mileage)
+nn_predict6 = predict(nn_fit6, temp2)
+nn_loss6 = sqrt(mean((cdtest_nn$price - nn_predict6)^2))
+print(nn_loss6)
+```
+```{r, echo = FALSE, cache = TRUE}
+#get fits, print summary,  and plot fit
+plot(cdtest_nn$mileage, cdtest_nn$price, xlab="Mileage", ylab="Price")
+oo = order(cdtest_nn$mileage)
+lines(cdtest_nn$mileage[oo],nn_predict6[oo],col="red",lwd=2)
+abline(lm(cdtest_nn$price~cdtest_nn$mileage,cdtest_nn)$coef, col = "green")
+```
+
+
