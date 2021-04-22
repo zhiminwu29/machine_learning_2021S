@@ -11,9 +11,11 @@ output: html_document
 rm(list=ls())
 
 ## Packages
-pkg.list <-c("randomForest", "gbm", "rpart", "rpart.plot")
+pkg.list <-c("randomForest", "gbm", "rpart", "rpart.plot",
+             "keras", "tensorflow", "Metrics",
+             "ggplot2")
 
-#install.packages(pkg.list)
+install.packages(pkg.list)
 lapply(pkg.list, require, character.only = TRUE)
 
 knitr::opts_chunk$set(echo = FALSE, fig.align='center')
@@ -185,6 +187,7 @@ rmseb5 = sqrt(mean((cdval$y - boostvalpred5)^2))
 rmseb6 = sqrt(mean((cdval$y - boostvalpred6)^2))
 rmseb7 = sqrt(mean((cdval$y - boostvalpred7)^2))
 rmseb8 = sqrt(mean((cdval$y - boostvalpred8)^2))
+
 ```
 
 ```{r, echo = FALSE, cache = TRUE}
@@ -265,6 +268,7 @@ nn_loss1 = sqrt(mean((cdval_nn$price - nn_predict1)^2))
 nn_loss2 = sqrt(mean((cdval_nn$price - nn_predict2)^2))
 nn_loss3 = sqrt(mean((cdval_nn$price - nn_predict3)^2))
 nn_loss4 = sqrt(mean((cdval_nn$price - nn_predict4)^2))
+
 ```
 
 ```{r, echo = FALSE, cache = TRUE}
@@ -284,6 +288,7 @@ nn_predict6 = predict(nn_fit6, temp2)
 nn_loss6 = sqrt(mean((cdtest_nn$price - nn_predict6)^2))
 print(nn_loss6)
 ```
+
 ```{r, echo = FALSE, cache = TRUE}
 #get fits, print summary,  and plot fit
 plot(cdtest_nn$mileage, cdtest_nn$price, xlab="Mileage", ylab="Price")
@@ -291,5 +296,51 @@ oo = order(cdtest_nn$mileage)
 lines(cdtest_nn$mileage[oo],nn_predict6[oo],col="red",lwd=2)
 abline(lm(cdtest_nn$price~cdtest_nn$mileage,cdtest_nn)$coef, col = "green")
 ```
+
+### Problem 4
+
+We continue from the previous example by adding a second predictor into our neural net model. We have `x1 = mileage` and `x2 = year`. We rescale `year` as we did with `mileage`:
+
+```{r}
+dat = cbind(cd2, year = (cd1$year-min(cd1$year))/(max(cd1$year)-min(cd1$year)))
+summary(dat$year)
+```
+
+We partition the train, validation, and test data using the same indices as before for comparison of the fits:
+```{r}
+cdtrain_nn = dat[ii[1:n1],]
+cdval_nn = dat[ii[n1+1:n2],]
+cdtrainval_nn = rbind(cdtrain_nn,cdval_nn)
+cdtest_nn = dat[ii[n1+n2+1:n3],]
+```
+
+We again will fit a simple model with various decay rates and sizes using a grid of combinations of both. 
+```{r, cache = TRUE}
+val = data.frame(price = cdval_nn$price, mileage = cdval_nn$mileage, year = cdval_nn$year)
+grid = expand.grid(size = c(5, 25, 50, 75, 100), decay = c(0.001 , 0.01, 0.05 ,0.1, 0.25, 0.5))
+grid1 = cbind(grid, rmse = 0)
+
+for(i in 1:nrow(grid)){
+  fit = nnet(price ~ mileage+year, cdtrain_nn, size = grid[i,1], decay = grid[i,2], linout=T, trace = FALSE)
+  pred = predict(fit, val)
+  grid1[i,3] = rmse(cdval_nn$price,pred)
+}
+```
+For this particular grid search the RMSE is minimized when the grid size is `r grid1[which(grid1$rmse==min(grid1$rmse)),1]` and the the decay is `r grid1[which(grid1$rmse==min(grid1$rmse)),2]`.
+
+Now let's see what the fits look like on our test data.
+```{r}
+ind = which(grid1$rmse==min(grid1$rmse))
+good_fit = nnet(price ~ mileage+year, cdtrainval_nn, size = grid1[ind,1] , decay = grid1[ind,2], linout=T)
+test = data.frame(price = cdtest_nn$price, mileage = cdtest_nn$mileage, year = cdtest_nn$year)
+pred = predict(good_fit, test)
+rmse = rmse(cdtest_nn$price, pred)
+```
+
+The RMSE for the test data is `r rmse`. 
+
+#What type of plot make sense for 3 dimeensions like this. 
+
+#If I have time I can use deep learning, but the homework makes me think it's not required. 
 
 
