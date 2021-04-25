@@ -1,0 +1,161 @@
+---
+title: "Project"
+output:
+  pdf_document: default
+  pdf_notebook: default
+
+---
+
+
+
+```{r}
+library(tidyverse,corrplot)
+library(rpart)
+library(MASS)
+library(rpart.plot)
+library(randomForest)
+library(randomForestExplainer)
+library(corrr)
+library(ggplot2)
+library(Hmisc)
+library(corrplot)
+
+
+df = read.csv("project_data.csv")
+```
+# 1 Introduction
+
+
+In this project we have considered a dataset of 2017 songs from Spotify and each song has 16 features. One of the features is called target whick is a categorical variable and tells us whether one particular individual liked or disliked a song. A song is labeled "1" if it is liked and "0" when it is disliked. The other features include  acousticness, danceability, durationms (duration in milliseconds), energy, instrumentalness, key, liveness, loudness, mode, speechiness, tempo, timesignature, valence, songname, artist.
+
+The goal of the project is to build several classifier to predict that based on the rest of the features, whether or not that individual wold like a song. 
+
+But first, we will prepare the data to fit some of these models.
+
+# 2 Data exploration and feature selection:
+
+Before, we try any model, we want to make sure if the data is ready for a fit. In particular we are looking for features which have missing values, the songs that are duplicated in the dataset, the types of features (if a feature is numerical or categorical),  and as well as the variables of importance for the fit. 
+
+```{r}
+
+ncol(df)
+nrow(df)
+colnames(df)
+```
+We drop the first column, which is just an indexing column that keeps track of the number of observations and has nothing to do with the data. 
+
+```{r}
+df1 = df[,c(2:ncol(df))]
+colnames(df1)
+
+
+```
+
+Looking for missing values
+```{r}
+#summary(df)
+is.null(df1)
+```
+
+Looking for duplicated observations in the dataset. 
+
+
+```{r}
+mean(duplicated(df1))
+```
+Non-zero mean suggest that there are some duplicated observations. We now delete those.
+```{r}
+df2 = unique(df1)
+mean(duplicated(df2))
+```
+Number of observations after the removal of duplicated data points. 
+
+```{r}
+nrow(df2)
+
+```
+Originally we had 2017 data points, so this means five of the data points were duplicated. 
+
+#### Looking for correllations (Heatmap of Correlation Matrix): 
+
+We have drooped the last two features 'song_title' and 'artist_name' as well. 
+
+```{r}
+df2_cor = cor(as.matrix(df2[,1:14]))
+corrplot(df2_cor, method="color",type = "lower")
+#df2_cor
+```
+
+
+#### Looking for correlation of other feautre with 'target':
+```{r}
+
+df3 = df2[,1:14]
+
+df3_cor <- df3 %>% 
+  correlate() %>% 
+  focus(target)
+#df3_cor
+```
+
+# 3 Features selection based on correlations with 'target':
+###### acousticness
+###### danceability				
+###### duration_ms				
+###### instrumentalness				
+###### speechiness	
+###### valence
+
+
+```{r}
+df4 = df3[,c(14,1,2,3,5,10,13)]
+head(df4)
+ncol(df4)
+
+```
+
+#4 Models  
+The potential methods to build a calcification model for this project include:
+
+## Logistic Regression (Penny)
+## Naive Bayes (Sinta)
+## Decision Trees (Atta)
+## Random Forests (Sinta)
+## Bossting (Penny)
+## Neural Nets (Antonio)
+## Deep Neural Nets (Antonio)
+
+## Test Train split
+```{r}
+n = nrow(df4)
+set.seed(99)
+pin = .75
+ii = sample(1:n,floor(pin*n))
+cdtrain = df4[ii,]
+cdtest = df4[-ii,]
+cat("dimension of train data:",dim(cdtrain),"\n")
+## dimension of train data: 750 3
+cat("dimension of test data:",dim(cdtest),"\n")
+## dimension of test data: 250 3
+
+```
+
+```{r}
+fit = rpart(target~., data = cdtrain, method = 'class')
+#rpart.plot(fit, extra = 106)
+
+```
+
+```{r}
+predict_unseen = predict(fit, cdtest, type = 'class')
+table_mat = table(cdtest$target, predict_unseen)
+table_mat
+```
+
+```{r}
+accuracy_Test = sum(diag(table_mat)) / sum(table_mat)
+print(paste('Accuracy for test data is: ', accuracy_Test))
+```
+# 5 Conclusions
+
+
