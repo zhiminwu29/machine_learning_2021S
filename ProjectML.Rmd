@@ -1,84 +1,111 @@
 ---
-title: "Project"
+title: '598: Machine Learning Project'
+subtitle: 'Application of Classification Methods on Spooftify Data'
+author: "Antonio Campbell, Sinta Sulistyo, Atta Ullah, Penny Wu"
+date: "4/30/2021"
 output:
-  pdf_document: default
+  pdf_document:
+    includes: 
+      in_header: "packages.tex"
   pdf_notebook: default
-
 ---
 
+```{r setup, include=FALSE}
+#=============================================
+## Clear .Rdata
+rm(list=ls())
 
+## Packages
+pkg.list <-c("randomForest", "gbm", "rpart", 
+             "rpart.plot","keras", "tensorflow", 
+             "Metrics", "ggplot2", "tidyverse",
+             "corrplot","rpart", "MASS", 
+             "rpart.plot", "randomForest", 
+             "randomForestExplainer",
+             "corrr", "Hmisc", "corrplot",
+             "knitr", 'nnet', 'caret',
+             'reshape2', 'ROCR')
 
-```{r}
-library(tidyverse,corrplot)
-library(rpart)
-library(MASS)
-library(rpart.plot)
-library(randomForest)
-library(randomForestExplainer)
-library(corrr)
-library(ggplot2)
-library(Hmisc)
-library(corrplot)
+#install.packages(pkg.list)
+lapply(pkg.list, require, character.only = TRUE)
 
+knitr::opts_chunk$set(echo = FALSE, fig.align="center")
+#=============================================
+```
 
+```{r, echo = FALSE}
 df = read.csv("project_data.csv")
 ```
 # 1 Introduction
 
+In this project we have considered a dataset of 2017 songs from Spotify. This data was provided by Spotify and posted by user GeorgeMcIntire on Kaggle ("https://www.kaggle.com/geomack/spotifyclassification"). Within the data, each song has 16 features. The feature of interest for classification is called `target` which indicates whether the creator of the dataset liked or disliked a song. A song is labeled "1" if it is liked and "0" when it is disliked. The other features include  `acousticness`, `danceability`, `durationMs (duration in milliseconds)`, `energy`, `instrumentalness`, `key`, `liveness`, `loudness`, `mode`, `speechiness`, `tempo`, `time-signature`, `valence`, `songname`, `artist`.
 
-In this project we have considered a dataset of 2017 songs from Spotify and each song has 16 features. One of the features is called target whick is a categorical variable and tells us whether one particular individual liked or disliked a song. A song is labeled "1" if it is liked and "0" when it is disliked. The other features include  acousticness, danceability, durationms (duration in milliseconds), energy, instrumentalness, key, liveness, loudness, mode, speechiness, tempo, timesignature, valence, songname, artist.
-
-The goal of the project is to build several classifier to predict that based on the rest of the features, whether or not that individual wold like a song. 
-
-But first, we will prepare the data to fit some of these models.
+The goal of the project is to build several classifiers for prediction that is based on the rest of the features to determine whether the individual would like a song. We begin by preparing the data to fit possible models appropriately. 
 
 # 2 Data exploration and feature selection:
+```{r}
+t1 = cbind(head(df[,1:2]),...="..." ,head(df[,15:17]))
+t2 = cbind(tail(df[,1:2]),...="..." ,tail(df[,15:17]))
+t1$artist = as.character(t1$artist)
+t2$artist = as.character(t2$artist)
+t1$song_title = as.character(t1$song_title)
+t2$song_title = as.character(t2$song_title)
+t1$... = as.character(t1$...)
+t2$... = as.character(t2$...)
+```
 
-Before, we try any model, we want to make sure if the data is ready for a fit. In particular we are looking for features which have missing values, the songs that are duplicated in the dataset, the types of features (if a feature is numerical or categorical),  and as well as the variables of importance for the fit. 
+```{r, results='asis'}
+kable(rbind(t1, rep('\\vdots', 6) ,t2), 
+      row.names = FALSE,  escape = FALSE, align = 'c', caption = "Data Sample")
+```
+
+#### Data Preparation 
+
+We ensure the data is adequate for fitting before we begin modeling. In particular we are looking for features which have missing values, the songs that are duplicated in the dataset, the types of features (if a feature is numerical or categorical), and as well as the variables of importance for the fit. 
 
 ```{r}
-
-ncol(df)
-nrow(df)
-colnames(df)
+print1 = t(data.frame(dim(df)))
+rownames(print1) <- c("count")
+colnames(print1) <- c("rows", "columns")
+kable(print1, caption = "Data Dimensions")
 ```
-We drop the first column, which is just an indexing column that keeps track of the number of observations and has nothing to do with the data. 
+
+We drop the first column, which is just for indexing and has no use to us here. The data has the remaining features
 
 ```{r}
 df1 = df[,c(2:ncol(df))]
 colnames(df1)
-
-
 ```
 
-Looking for missing values
 ```{r}
 #summary(df)
-is.null(df1)
+isNull = is.null(df1)
+
+if(isNull == FALSE)
+{
+  a = 0
+}
 ```
 
-Looking for duplicated observations in the dataset. 
+Next we check if there are any missing values within the data and we find that there are `r a` records with missing data in them; however, there are 5 duplicate records:
 
-
-```{r}
-mean(duplicated(df1))
+```{r, echo = FALSE}
+dupeDat = df1[which(duplicated(df1)),]
+kable(cbind(dupeDat[,1:2], ...="..." ,dupeDat[,15:16]))
 ```
-Non-zero mean suggest that there are some duplicated observations. We now delete those.
+
+We remove the 5 remaining data points the data that remains has the following dimensions, 
 ```{r}
 df2 = unique(df1)
-mean(duplicated(df2))
+print2 = t(data.frame(dim(df2)))
+rownames(print2) <- c("count")
+colnames(print2) <- c("rows", "columns")
+kable(print2, caption = "Data Dimensions")
 ```
-Number of observations after the removal of duplicated data points. 
 
-```{r}
-nrow(df2)
+#### Looking for Correlations (Correlation Matrix Heatmap): 
 
-```
-Originally we had 2017 data points, so this means five of the data points were duplicated. 
-
-#### Looking for correllations (Heatmap of Correlation Matrix): 
-
-We have drooped the last two features 'song_title' and 'artist_name' as well. 
+For this analysis we have drooped the last two features 'song_title' and 'artist_name' as well. 
 
 ```{r}
 df2_cor = cor(as.matrix(df2[,1:14]))
@@ -89,7 +116,6 @@ corrplot(df2_cor, method="color",type = "lower")
 
 #### Looking for correlation of other feautre with 'target':
 ```{r}
-
 df3 = df2[,1:14]
 
 df3_cor <- df3 %>% 
@@ -111,7 +137,6 @@ df3_cor <- df3 %>%
 df4 = df3[,c(14,1,2,3,5,10,13)]
 head(df4)
 ncol(df4)
-
 ```
 
 #4 Models  
@@ -122,9 +147,6 @@ The potential methods to build a calcification model for this project include:
 ## Decision Trees (Atta)
 ## Random Forests (Sinta)
 ## Bossting (Penny)
-## Neural Nets (Antonio)
-## Deep Neural Nets (Antonio)
-
 ## Test Train split
 ```{r}
 n = nrow(df4)
@@ -143,7 +165,6 @@ cat("dimension of test data:",dim(cdtest),"\n")
 ```{r}
 fit = rpart(target~., data = cdtrain, method = 'class')
 #rpart.plot(fit, extra = 106)
-
 ```
 
 ```{r}
@@ -156,6 +177,231 @@ table_mat
 accuracy_Test = sum(diag(table_mat)) / sum(table_mat)
 print(paste('Accuracy for test data is: ', accuracy_Test))
 ```
+## Neural Nets
+
+####to do: explanations coming soon, commenting code
+
+We begin with the simplest model we can fit based on the three main predictors that we have used for the previous models, `danceability`, `speachiness`,  `acousticness`. We will use a single-layer neural network to fit on the training data. For optimization we will begin by using a grid search accross of layer size. We also want to introduce regularization so we will include those in our grid as well.
+
+```{r}
+#functions to scale on 0-1
+scaling01 <- function(x){
+  (x-min(x))/(max(x)-min(x))
+}
+
+scaleCols <-function(x){
+  a = matrix(1, nrow = nrow(x))%*%apply(x,2,min)
+  b = matrix(1, nrow = nrow(x))%*%apply(x,2,max)
+  return((x - a)/(b-a))
+}
+```
+
+```{r}
+#copies for scaling and scale them
+sTrain = scaleCols(cdtrain)
+sTest = scaleCols(cdtest)
+sTrain$target = as.factor(sTrain$target)
+sTest$target = as.factor(sTest$target)
+```
+
+```{r}
+#create new train/validation split for initial search
+trainValsplits <- function(i = 10,vpercent){
+  set.seed(i)
+  trainN = nrow(sTrain)
+  verifyInd = sample(1:trainN,floor(vpercent*trainN))
+  return(verifyInd)
+}
+```
+
+```{r}
+#train on training data for various fits and verify
+fitModel <- function(dat, grid, verifyInd)
+{
+  nV= dat[verifyInd,]
+  nT = dat[-verifyInd,]
+   
+  grid1 = cbind(grid, acc=1, sens=1, spec=1)
+  for(i in 1:nrow(grid)){
+    fit = nnet(target ~ danceability+speechiness+acousticness, 
+               nT, size = grid[i,1], decay = grid[i,2], linout=FALSE, 
+               trace = FALSE)
+    outpred = data.frame(rawProbs = predict(fit, nV,c("raw")))
+    outpred$class = as.factor(predict(fit, nV,c("class")))
+    z = confusionMatrix(nV$target,outpred$class)
+    grid1[i,4:5] = z$byClass[1:2]
+    grid1[i,3] = z$overall[1]
+  }
+  return(grid1)
+}
+```
+
+```{r}
+#choose columns for simple fit
+nnTrain1 = sTrain[,c("target","danceability","speechiness", "acousticness")]
+nnTest1 = sTest[,c("target","danceability","speechiness", "acousticness")]
+```
+
+```{r, cache = TRUE}
+expGrid = expand.grid(size = seq(5, 100, by = 5), 
+                   decay = c(0.0001,0.001, seq(0.0025, 0.01, by = 0.0025), 
+                             0.025, 0.05, 0.075,0.1, 0.25, 0.5))
+
+expGrid
+
+#interesting seeds: 192, 1959, 
+split = trainValsplits(i = 211, vpercent = .30)
+outGrid = fitModel(dat = nnTrain1, grid = expGrid, verifyInd = split)
+ 
+#order outputs from large grid 
+ord = order(outGrid$acc, decreasing = TRUE)
+topFits = outGrid[ord[1:2],]
+midFits = outGrid[c(ord[(floor(length(ord)/3))],ord[2*(floor(length(ord)/3))]),]
+lastFit = outGrid[ord[length(ord)],]
+fits = rbind(topFits,midFits,lastFit)
+```
+
+```{r, fig.height= 8, cache = TRUE}
+runs = 20 #500 #set low to save time, change to 250-500 in last compilation, takes like 5 mins to run
+keep = runs*nrow(fits)
+keeps = matrix(0, nrow = keep, ncol = 4)
+keeps = data.frame(keeps)
+keeps[,1] = rep(paste("Size",fits$size,"Rates",fits$decay, sep = ""),runs)
+
+for(j in 1:runs){
+  split =  trainValsplits(j, vpercent = .30)
+  outGrid = fitModel(dat = nnTrain1, grid = fits[,1:2], verifyInd = split)
+  keeps[(j*5-4):(j*5),2:4] = outGrid[,3:5]
+}
+
+keeps$X1 = as.factor(keeps$X1)
+colnames(keeps)  <- c("SizeRate", "Accuracy", "Sensitivity", "Specificity")
+keepsMelt = melt(keeps, 
+                 id.variables = c("SizeRate"), 
+                 variable.name = "Measure", 
+                 value.name = "Percentage")
+
+ggplot(keepsMelt, aes(x = SizeRate, y = Percentage)) + 
+  geom_boxplot() + 
+  facet_wrap( ~Measure , ncol = 1)
+```
+####explain how biased fits are as one of the 'best fits' of a single split doesn't operate the same for splits. other splits
+####explain why spotify might care more about specificity vs sensitivity. If the person is a music lover in general who dooens't stick to one genre or music style they care way more about Specificity because the use probably likes more than they don't like so finding the don't likes are more important vs. somoneone who has limited music taste. Getting the likes categorized are the most important. 
+```{r}
+#ROC Plot Code
+plotROC <- function(pihat, ytrue, add = TRUE, col = '#791b19') {
+  thresh <- sort(pihat)
+  N <- length(pihat)
+  yhat <- sapply(1:N, function(a) as.double(pihat >= thresh[a]))
+  tpr <- sapply(1:N, function(a) length(which(ytrue == 1 & yhat[,a ] == 1)) / sum(ytrue == 1)) 
+  fpr <- sapply(1:N, function(a) length(which(ytrue == 0 & yhat[,a ] == 1)) / sum(ytrue == 0)) 
+  if (add == FALSE) {
+    plot(fpr,tpr, pch = 20, cex = 0.2,alpha= 0.3, col = col, bty = 'n', type = 'b', xlim = c(0,1), ylim = c(0,1), 
+         main = "ROC Plot", ylab = "True Positive Rate", xlab = "False Posive")
+  abline(a = 0, b = 1, lty = 2, col = col, bty = 'n') }
+  else {
+  points(fpr, tpr, pch = 20, cex = 0.1,  col = c(col,alpha = 0.4), bty = 'n', type = 'l')
+  points(fpr, tpr, pch = 20, cex = 0.3, col = col, bty = 'n') }
+}
+```
+
+```{r}
+fit1 = nnet(target ~ danceability+speechiness+acousticness, 
+               nnTrain1, size = fits[1,1], decay = fits[1,2], linout=FALSE, 
+               trace = FALSE)
+fit2 = nnet(target ~ danceability+speechiness+acousticness, 
+               nnTrain1, size = fits[2,1], decay = fits[2,2], linout=FALSE, 
+               trace = FALSE)
+fit3 = nnet(target ~ danceability+speechiness+acousticness, 
+               nnTrain1, size = fits[3,1], decay = fits[3,2], linout=FALSE, 
+               trace = FALSE)
+fit4 = nnet(target ~ danceability+speechiness+acousticness, 
+               nnTrain1, size = fits[4,1], decay = fits[4,2], linout=FALSE, 
+               trace = FALSE)
+fit5 = nnet(target ~ danceability+speechiness+acousticness, 
+               nnTrain1, size = fits[5,1], decay = fits[5,2], linout=FALSE, 
+               trace = FALSE)
+
+outpred1 = data.frame(rawProbs = predict(fit1, nnTest1,c("raw")))
+outpred2 = data.frame(rawProbs = predict(fit2, nnTest1,c("raw")))
+outpred3 = data.frame(rawProbs = predict(fit3, nnTest1,c("raw")))
+outpred4 = data.frame(rawProbs = predict(fit4, nnTest1,c("raw")))
+outpred5 = data.frame(rawProbs = predict(fit5, nnTest1,c("raw")))
+preds = cbind(outpred1,outpred2,outpred3,outpred4,outpred5)
+
+#colors and plot
+cO = c("#000080","#791b19", "#DAA520", "#228B22", "#A9A9A9")
+{
+  plot(0, col = "white",xlim = c(0,1), ylim = c(0,1),
+  main = "ROC Plot", ylab = "True Positive Rate", xlab = "False Positive") 
+  abline(a = 0, b = 1, lty = 2, col = "#000000", bty = 'n')
+  
+  for (j in 1:length(fits$size)){
+    plotROC(preds[,j], nnTest1 , add = TRUE, col = cO[j])
+  } 
+  legend("bottomright", 
+  legend = c("Fit1", "Fit2", "Fit3", "Fit4", "Fit5"), 
+  col = cO,
+  pch = c(17,17,17,17,17), 
+  bty = "n", 
+  pt.cex = 1, 
+  cex = 1, 
+  text.col = "black", 
+  horiz = F , 
+  inset = c(0.1, 0.1))
+}
+```
+
+```{r}
+#Performance
+perf1= performance(prediction(
+  predict(fit1, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+perf2= performance(prediction(
+  predict(fit2, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+perf3= performance(prediction(
+  predict(fit3, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+perf4= performance(prediction(
+  predict(fit4, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+perf5= performance(prediction(
+  predict(fit5, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+lperfs = list(perf1,perf2,perf3,perf4,perf5)
+
+{
+  plot(0, col = "white",xlim = c(0,1), ylim = c(0,1),
+  main = "Cummulative Gains", ylab = "Treu Positive Rate", xlab = "Rate of Positive Predictions") 
+  abline(a = 0, b = 1, lty = 2, col = "#000000", bty = 'n')
+  for(i in 1:length(lperfs)){
+    plot(lperfs[[i]], add = TRUE, colorize = FALSE, col = cO[i])
+  }
+  legend("bottomright", 
+  legend = c("Fit1", "Fit2", "Fit3", "Fit4", "Fit5"), 
+  col = cO,
+  pch = c(17,17,17,17,17), 
+  bty = "n", 
+  pt.cex = 1, 
+  cex = 1, 
+  text.col = "black", 
+  horiz = F , 
+  inset = c(0.1, 0.1))
+}
+```
+
+###to do: Choose different cut off for classification than 0.5 and explain why spotify might do this... based on specificty/sensitivity. We want to reduce fpr, better to make a playlist of more good songs that letting in more songs they wouldn't like. Minimize fpr on sensitivity vs. specificity. Refit using new classification rule. pick best fit from these and show confusion matrix, show accuracy.  
+
+####To do: fit NN on all predictors and smaller grid of sizes/rates...try regularization decay rates = c(0.001, 0.01, 0.05, 0.1, 0.25) sizes = c(5,15,25,75). Say/show something about why regularization should provide similar fit to above. (Consider fitting model over several splits again again on different models and view box plot?? might take too long if I use more thatn 100 again..)
+
+#### ROCs/Gains/Classificiation rule/Confusion matrix on best
+
+#### Add cost functions for fits as well???
+
+#### Confusioon matrix plots??
+
+## Deep Neural Nets (Antonio)
+
+####play with 2-3 layers with smallest ammount of predictors. If worse than 1 layer neural net stop there. 
+
+####Summary oof metrics of thre 
+
 # 5 Conclusions
 
 
