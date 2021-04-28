@@ -1,0 +1,129 @@
+---
+title: 'STP 598: Homework 3'
+author: "Antonio Campbell, Sinta Sulistyo, Atta Ullah, Penny Wu"
+date: "3/9/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+#=============================================
+## Clear .Rdata
+rm(list=ls())
+
+## Packages
+pkg.list <-c("ggplot2", "reshape2", "knitr","matrixcalc",
+             "rootSolve", "Matrix", "kknn", "Metrics", "pracma"
+             ,"glmnet")
+
+#install.packages(pkg.list)
+lapply(pkg.list, require, character.only = TRUE)
+
+knitr::opts_chunk$set(echo = FALSE, fig.align='center')
+#=============================================
+```
+
+#1. Problem 1. Basic Optimization, MLE for IID Poisson Data
+Suppose $y_i$ is a count then a very common model is to assume the Poisson disttribuion: $$P(Y=y \;|\; \lambda) = \frac{e^{-\lambda} \, \lambda^y}{y!}, \; y = 0,1,2,\ldots$$
+Given $Y_i \sim Poisson(\lambda)$ iid, (that is, \(Y_i = y_i\)), what is the MLE of $\lambda$?
+
+If the random variables are iid, then the joint distribution is the product of the marginal distributions. Let $\mathbf{y}$ be the sample $y_1, \dots, y_n$ 
+$$L(\lambda \vert \mathbf{y}) = \prod_{i = 1}^{n}\frac{e^{-\lambda} \, \lambda^{y_i}}{y_i!}.$$ We take the log of the likelihood so that we can maximize easily. 
+$$\log(L(\lambda \vert \mathbf{y})) = \sum_{i = 1}^{n}\log\bigg(\frac{e^{-\lambda} \, \lambda^{y_i}}{y_i!}\bigg) = -n\lambda -\sum{\log(y_i!)}+ \sum(y_i)\log(\lambda).$$
+Differentiate with respect to lambda and set to zero to maximize: $$\frac{\delta \log(L(\lambda \vert \mathbf{y}))}{\delta d\lambda}=-n + \frac{\sum y_i}{\lambda} = 0 \implies \hat\lambda =\frac{\sum y_i}{n}$$. 
+
+The MLE for the parameter of the $poisson$ distribution is the sample mean. 
+
+
+#Problem 2. Constrained Optimization, Minimum Variance Portfolio
+
+Suppose we are considering investing in $p$ stocks where the uncertain return on the $i$th
+stock is denoted by $R_i$, $i=1,2,\dots,p$. Let $R=(R_1,R_2,\dots,R_p)^{'}.$ A portfolio is a given by $w=(w_1,w_2,\dots,w_p)^{'}$ where $w_i$ is the fraction of wealth invested in asset $i$. The $\{w_i\}$
+must satisfy $\sum w_i=1$. The return on the portfolio is then $$P = w'R = \sum w_i R_i.$$ We want to find the global \textbf{minimum variance portfolio}: $$\underset{w}{\min} \, Var(P), \;\; \text{subject to} \sum w_i = 1.$$ If we let $\iota=(1,1,\dots,1)^{'}$, the vector of ones, and $Var(R)=\Sigma$ then our problem is $$\underset{w}{\min }\,  w^{'}\Sigma w  \;\; \text{subject to } w^{'}\iota = 1.$$ Find the global minimum variance portfolio in terms of $\Sigma$
+and $\iota$.
+
+If we know that $\sum {w_i} = 1$ we can easily say $\sum {w_i}-1 = 0$ or $w^{'}\iota-1 = 0$. We use the Karush-Kuhn-Tucker conditions to minimize. By this we take the derivative with respect to $w$, $$\frac{\delta  L(\lambda,w)}{\delta w} = \frac{\delta  (w^{'}\Sigma{w})}{\delta w} + \frac{\delta  \lambda(w^{'}\iota-1)}{\delta w} = 2\Sigma w + \lambda\iota$$ $$ \implies {\hat w} = -\lambda\Sigma^{-1}\iota/2.$$ To express this solution in terms of $\Sigma, \iota$ we solve for $\lambda$. Premultiply by $\iota^{'}$ and then solve. Since we have that $\iota^{'}{w} = 1$, $$ \iota^{'}{w} = -\lambda\iota^{'}\Sigma^{-1}\iota/2  \implies \lambda = -2/(\iota^{'}\Sigma^{-1}{\iota}).$$ We plug this into our solution of $\hat w$ to have:
+
+$$\hat{w} = \frac{-\lambda\Sigma^{-1}\iota/2}{-2/\iota^{'}\Sigma^{-1}{\iota}} =\frac{\lambda\Sigma^{-1}\iota}{\iota^{'}\Sigma^{-1}{\iota}}$$
+
+$\hat w$ is the $w$ such that $Var(w^{'}R) = Var(P)$ is minimized.
+
+
+# Problem 3. Polynomial Regression
+
+A basic idea in nonlinear regression is to use polynomial terms.
+
+With one $x$ variable, this means we consider the models: $$Y_i=\beta_0+\beta_1 x_i+\beta_2 x^2_i+\ldots+\beta_p x^p_i+\epsilon_i.$$
+
+Using the simple used cars data (with $n=1,000$) with $Y$= price and $x$=mileage, find the best choice of $p$. 
+* Use BIC to pick $p$
+* use an out-of-sample criteria to pick $p$
+
+Fit your chosen polynomial mode using all the data and plot the fit on top of the data. Do you like it? Also plot the fits for a $p$ that is “way to big”. What is wrong with it?
+
+```{r echo=false,cache=true}
+
+cars = read.csv("http://www.rob-mcculloch.org/data/susedcars.csv", header = TRUE)
+head(cars)
+```
+
+First, we need to create a dataframe for $x$ varaible:
+```{r echo=false,cache=true}
+attach(cars)
+#price = price/1000
+mileage = mileage/1000
+ddf<- data.frame(price=price,xi = mileage, xi2 = mileage^2,xi3 = mileage^3,
+               xi4 = mileage^4, xi5=mileage^5,xi6=mileage^6, xi7=mileage^7,
+               xi8=mileage^8,xi9=mileage^9,xi10=mileage^10)
+head(ddf,3)
+detach(cars)
+attach(ddf)
+```   
+
+Now we will apply forward selection with BIC to choose the best $p$.
+## Forward selection with BIC
+
+
+```{r warning=false,cache=true}
+source("do-stepcv.R")
+n <- nrow(ddf)
+##do forwards stepAIC, stopping when adding any var makes BIC bigger.
+nullmod = lm(price~1,ddf) #null model, no variables
+lmtran =lm(price~.,ddf) #full model
+#bictran = extractAIC(lmtran,k=log(n))
+#print(summary(lmtran))
+#bictran
+
+
+fwd = stepAIC(nullmod,scope=formula(lmtran),direction="forward",k=log(n),trace=0)
+print(summary(fwd))
+bicfwd = extractAIC(fwd,k=log(n))
+cat("bic for forward model is: ",bicfwd,"\n")
+
+```
+
+
+
+```{r }
+source("do-stepcv.R")
+yind=1
+xind=2:ncol(ddf)
+set.seed(199)
+folds = getfolds(5,nrow(ddf))
+nstep = 7
+
+stcv = stepcv(ddf,yind,xind,formula(lmtran),folds,nstep)
+
+rmse=sqrt(apply(stcv,1,sum)/n)
+plot(0:nstep,rmse,xlab="num var",ylab="RMSE",
+      cex.lab=1.5,cex.axis=1.5,type="b",col="red",pch=16)
+
+
+```
+
+
+
+
+
+
