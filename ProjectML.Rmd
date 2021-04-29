@@ -137,7 +137,78 @@ The potential methods to build a calcification model for this project include:
 
 ## Logistic Regression (Penny)
 
-## Naive Bayes (Sinta)
+## Naive Bayes 
+
+We consider 6 predictors based on the correlation value, `danceability`, `speechiness`,  `acousticness`, `duration_ms`, `instrumentalness`,  `valence`.We develop 7 Naive Bayes classification model using different combination of predictors. 
+We also use three-set approach by splitting the data set into training, validation, and testing data set. We develop the seven classification models using the training data set and then predict using the validation data set. We then compare the accuracy of each model, and select the Naive Bayes model with the highest accuracy.     
+
+```{r}
+#create train, validation, test split
+set.seed(99)
+n=nrow(cdtrain)
+n1=floor(n*0.75)
+n2=floor(n*0.25)
+ii = sample(1:n,n)
+cdtrain2 = cdtrain[ii[1:n1],]
+cdval2 = cdtrain[ii[n1+1:n2],]
+cdtrainval2 = rbind(cdtrain2,cdval2)
+```
+
+
+
+```{r}
+library(e1071)
+modelNB1 <- naiveBayes(target~danceability, data = cdtrain2, laplace = 1)
+modelNB2 <- naiveBayes(target~danceability+speechiness, data = cdtrain2, laplace = 1)
+modelNB3 <- naiveBayes(target~danceability+speechiness+acousticness, data = cdtrain2, laplace = 1)
+modelNB4 <- naiveBayes(target~danceability+speechiness+instrumentalness, data = cdtrain2, laplace = 1)
+modelNB5 <- naiveBayes(target~danceability+speechiness+acousticness+instrumentalness, data = cdtrain2, laplace = 1)
+modelNB6 <- naiveBayes(target~danceability+speechiness+acousticness+valence, data = cdtrain2, laplace = 1)
+modelNB7 <- naiveBayes(target~., data = cdtrain2, laplace = 1)
+predNB1 <- predict(modelNB1, cdval2)
+predNB2 <- predict(modelNB2, cdval2)
+predNB3 <- predict(modelNB3, cdval2)
+predNB4 <- predict(modelNB4, cdval2)
+predNB5 <- predict(modelNB5, cdval2)
+predNB6 <- predict(modelNB6, cdval2)
+predNB7 <- predict(modelNB7, cdval2)
+```
+
+
+```{r}
+table_matNB1 = table(cdval2$target, predNB1)
+table_matNB2 = table(cdval2$target, predNB2)
+table_matNB3 = table(cdval2$target, predNB3)
+table_matNB4 = table(cdval2$target, predNB4)
+table_matNB5 = table(cdval2$target, predNB5)
+table_matNB6 = table(cdval2$target, predNB6)
+table_matNB7 = table(cdval2$target, predNB7)
+accuracyNB1 = sum (diag(table_matNB1))/sum(table_matNB1)
+accuracyNB2 = sum (diag(table_matNB2))/sum(table_matNB2)
+accuracyNB3 = sum (diag(table_matNB3))/sum(table_matNB3)
+accuracyNB4 = sum (diag(table_matNB4))/sum(table_matNB4)
+accuracyNB5 = sum (diag(table_matNB5))/sum(table_matNB5)
+accuracyNB6 = sum (diag(table_matNB6))/sum(table_matNB6)
+accuracyNB7 = sum (diag(table_matNB7))/sum(table_matNB7)
+accuracyNB <- cbind(accuracyNB1,accuracyNB2,accuracyNB3,accuracyNB4,accuracyNB5,accuracyNB6,accuracyNB7)
+accuracyNB
+```
+It is interesting to see that there are two models with the highest accuracy of 63.67%. The first model is the model that use all the 6 predictors and the second model is the model that use 3 predictors, `danceability`, `speechiness`, `acousticness`,
+We refit the model using the combination of training and validation data set on both models and predict using the testing data set. Then, we compare the accuracy of both models. 
+
+```{r}
+NBmodel1 <- naiveBayes(target~., data = cdtrainval2, laplace = 1)
+NBmodel2 <- naiveBayes(target~danceability+speechiness+acousticness, data = cdtrainval2, laplace = 1)
+NBpred1 <- predict(NBmodel1, cdtest)
+NBpred2 <- predict(NBmodel2, cdtest)
+NBtable_mat1 = table(cdtest$target, NBpred1)
+NBtable_mat2 = table(cdtest$target, NBpred2)
+NBaccuracy1 = sum (diag(NBtable_mat1))/sum(NBtable_mat1)
+NBaccuracy2 = sum (diag(NBtable_mat2))/sum(NBtable_mat2)
+NBaccuracy <- cbind(NBaccuracy1, NBaccuracy2)
+NBaccuracy
+```
+It shows that the highest accuracy is obtained from the Naive Bayes model that uses all the 6 predictors with accuracy of `r NBaccuracy1`.
 
 ## Decision Trees (Atta)
 
