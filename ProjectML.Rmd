@@ -94,7 +94,7 @@ dupeDat = df1[which(duplicated(df1)),]
 kable(cbind(dupeDat[,1:2], ...="..." ,dupeDat[,15:16]))
 ```
 
-We remove the 5 remaining data points the data that remains has the following dimensions, 
+We remove the 5 remaining data points and the data that remains has the following dimensions, 
 ```{r}
 df2 = unique(df1)
 print2 = t(data.frame(dim(df2)))
@@ -103,34 +103,33 @@ colnames(print2) <- c("rows", "columns")
 kable(print2, caption = "Data Dimensions")
 ```
 
-#### Looking for Correlations (Correlation Matrix Heatmap): 
+#### Correlation with Target (Correlation Matrix Heatmap): 
 
-For this analysis we have drooped the last two features 'song_title' and 'artist_name' as well. 
-
-```{r}
-df2_cor = cor(as.matrix(df2[,1:14]))
-corrplot(df2_cor, method="color",type = "lower")
-#df2_cor
-```
+We include a correlation heat plot. For this analysis we have droped the last two features 'song_title' and 'artist_name', which we do not use in our final analysis as well as those previously dropped.  
 
 
-#### Looking for correlation of other feautre with 'target':
-```{r}
+```{r warning=FALSE, include=FALSE,cache = TRUE}
+
 df3 = df2[,1:14]
-
 df3_cor <- df3 %>% 
   correlate() %>% 
   focus(target)
-#df3_cor
+df3_cor
+
 ```
 
-# 3 Features selection based on correlations with 'target':
-###### acousticness
-###### danceability				
-###### duration_ms				
-###### instrumentalness				
-###### speechiness	
-###### valence
+```{r echo=FALSE, echo=FALSE, fig.height=3, fig.width=8,cache = TRUE}
+yy <- data.frame(Features = df3_cor$term,
+                 Correlations = df3_cor$target )
+
+cor_plot <- ggplot(data = yy, aes(x=Correlations, y=Features,fill=Correlations)) +
+  geom_bar(stat="identity") +theme_minimal()+
+  ggtitle("Correlations of 'target'  with rest of the featurs") +
+  xlab("Correlations") + ylab("Features")
+cor_plot
+
+```
+The results of this plot tells us that `instrumentalness`, `danceability`, `speechiness`, and `acousticness` are among the most correlated with the the target variable. Additionally, `uration_ms`,	`instrumentalness` and `valence` relatively higher correlations as compared to the remaining features. 
 
 
 ```{r}
@@ -138,15 +137,6 @@ df4 = df3[,c(14,1,2,3,5,10,13)]
 head(df4)
 ncol(df4)
 ```
-
-#4 Models  
-The potential methods to build a calcification model for this project include:
-
-## Logistic Regression (Penny)
-## Naive Bayes (Sinta)
-## Decision Trees (Atta)
-## Random Forests (Sinta)
-## Bossting (Penny)
 ## Test Train split
 ```{r}
 n = nrow(df4)
@@ -162,26 +152,284 @@ cat("dimension of test data:",dim(cdtest),"\n")
 
 ```
 
-```{r}
-fit = rpart(target~., data = cdtrain, method = 'class')
-#rpart.plot(fit, extra = 106)
-```
+
+#4 Models  
+The potential methods to build a calcification model for this project include:
+
+## Logistic Regression (Penny)
+
+## Naive Bayes 
+
+We consider 6 predictors based on the correlation value, `danceability`, `speechiness`,  `acousticness`, `duration_ms`, `instrumentalness`,  `valence`.We develop 7 Naive Bayes classification model using different combination of predictors. 
+We also use three-set approach by splitting the data set into training, validation, and testing data set. We develop the seven classification models using the training data set and then predict using the validation data set. We then compare the accuracy of each model, and select the Naive Bayes model with the highest accuracy.     
 
 ```{r}
-predict_unseen = predict(fit, cdtest, type = 'class')
-table_mat = table(cdtest$target, predict_unseen)
-table_mat
+#create train, validation, test split
+set.seed(99)
+n=nrow(cdtrain)
+n1=floor(n*0.75)
+n2=floor(n*0.25)
+ii = sample(1:n,n)
+cdtrain2 = cdtrain[ii[1:n1],]
+cdval2 = cdtrain[ii[n1+1:n2],]
+cdtrainval2 = rbind(cdtrain2,cdval2)
 ```
 
+
+
 ```{r}
-accuracy_Test = sum(diag(table_mat)) / sum(table_mat)
-print(paste('Accuracy for test data is: ', accuracy_Test))
+library(e1071)
+modelNB1 <- naiveBayes(target~danceability, data = cdtrain2, laplace = 1)
+modelNB2 <- naiveBayes(target~danceability+speechiness, data = cdtrain2, laplace = 1)
+modelNB3 <- naiveBayes(target~danceability+speechiness+acousticness, data = cdtrain2, laplace = 1)
+modelNB4 <- naiveBayes(target~danceability+speechiness+instrumentalness, data = cdtrain2, laplace = 1)
+modelNB5 <- naiveBayes(target~danceability+speechiness+acousticness+instrumentalness, data = cdtrain2, laplace = 1)
+modelNB6 <- naiveBayes(target~danceability+speechiness+acousticness+valence, data = cdtrain2, laplace = 1)
+modelNB7 <- naiveBayes(target~., data = cdtrain2, laplace = 1)
+predNB1 <- predict(modelNB1, cdval2)
+predNB2 <- predict(modelNB2, cdval2)
+predNB3 <- predict(modelNB3, cdval2)
+predNB4 <- predict(modelNB4, cdval2)
+predNB5 <- predict(modelNB5, cdval2)
+predNB6 <- predict(modelNB6, cdval2)
+predNB7 <- predict(modelNB7, cdval2)
 ```
+
+
+```{r}
+table_matNB1 = table(cdval2$target, predNB1)
+table_matNB2 = table(cdval2$target, predNB2)
+table_matNB3 = table(cdval2$target, predNB3)
+table_matNB4 = table(cdval2$target, predNB4)
+table_matNB5 = table(cdval2$target, predNB5)
+table_matNB6 = table(cdval2$target, predNB6)
+table_matNB7 = table(cdval2$target, predNB7)
+accuracyNB1 = sum (diag(table_matNB1))/sum(table_matNB1)
+accuracyNB2 = sum (diag(table_matNB2))/sum(table_matNB2)
+accuracyNB3 = sum (diag(table_matNB3))/sum(table_matNB3)
+accuracyNB4 = sum (diag(table_matNB4))/sum(table_matNB4)
+accuracyNB5 = sum (diag(table_matNB5))/sum(table_matNB5)
+accuracyNB6 = sum (diag(table_matNB6))/sum(table_matNB6)
+accuracyNB7 = sum (diag(table_matNB7))/sum(table_matNB7)
+accuracyNB <- cbind(accuracyNB1,accuracyNB2,accuracyNB3,accuracyNB4,accuracyNB5,accuracyNB6,accuracyNB7)
+accuracyNB
+```
+It is interesting to see that there are two models with the highest accuracy of 63.67%. The first model is the model that use all the 6 predictors and the second model is the model that use 3 predictors, `danceability`, `speechiness`, `acousticness`,
+We refit the model using the combination of training and validation data set on both models and predict using the testing data set. Then, we compare the accuracy of both models. 
+
+```{r}
+NBmodel1 <- naiveBayes(target~., data = cdtrainval2, laplace = 1)
+NBmodel2 <- naiveBayes(target~danceability+speechiness+acousticness, data = cdtrainval2, laplace = 1)
+NBpred1 <- predict(NBmodel1, cdtest)
+NBpred2 <- predict(NBmodel2, cdtest)
+NBtable_mat1 = table(cdtest$target, NBpred1)
+NBtable_mat2 = table(cdtest$target, NBpred2)
+NBaccuracy1 = sum (diag(NBtable_mat1))/sum(NBtable_mat1)
+NBaccuracy2 = sum (diag(NBtable_mat2))/sum(NBtable_mat2)
+NBaccuracy <- cbind(NBaccuracy1, NBaccuracy2)
+NBaccuracy
+```
+It shows that the highest accuracy is obtained from the Naive Bayes model that uses all the 6 predictors with accuracy of `r NBaccuracy1`.
+
+## Decision Trees 
+
+```{r ,echo=FALSE, cache=FALSE}
+cdtrain1 = cdtrain[,c(1,2,3,6)]
+cdtest1 = cdtest[,c(1,2,3,6)]
+## Decision Trees  1 ()
+big.tree1 = rpart(target ~ . ,method ="class",data = cdtrain1, control = rpart.control(minsplit=3, cp = 0.003))
+nbig1 = length(unique(big.tree1$where))
+#cat("size of big tree: ",nbig1,"\n")
+# get nice tree from CV results
+iibest1 = which.min(big.tree1$cptable[,"xerror"]) #which has the lowest error
+bestcp1 = big.tree1$cptable[iibest1,"CP"]
+bestsize1 = big.tree1$cptable[iibest1,"nsplit"]+1
+#bestsize1
+
+```
+We fit a big tree of size `r nbig1` on the training data using using only three features 'danceability', 'speachiness' and 'acousticnes'.  As suggested by the minimum cross validation relative error, the best size for our fits is `r bestsize1`.
+
+```{r, echo=FALSE, fig.height=3, fig.width=6, cache=TRUE}
+plotcp(big.tree1,lwd =3, col = 'blue',lty  = 5)
+
+```
+
+```{r cache=FALSE, include=FALSE}
+# get nice tree from CV results
+iibest1 = which.min(big.tree1$cptable[,"xerror"]) #which has the lowest error
+bestcp1 = big.tree1$cptable[iibest1,"CP"]
+bestsize1 = big.tree1$cptable[iibest1,"nsplit"]+1
+bestsize1
+```
+We prune the big tree to a tree of size `r bestsize1` as shown in the following figure. Although `acounstiness` was included among the predictive variables, but from the plot we observe that it does not play any rule decision making.
+
+```{r cache=FALSE, include=FALSE,cache = TRUE}
+best.tree1 = prune(big.tree1,cp = bestcp1)
+nbest1 = length(unique(best.tree1$where))
+cat("size of best tree: ", nbest1,"\n")
+```
+
+```{r echo=FALSE, fig.width=8, cache = TRUE, fig.height=2,cache = TRUE}
+rpart.plot(best.tree1, split.cex=0.9,cex=0.9,type=2,extra="auto")
+```
+```{r, include=FALSE}
+predict_unseen1 = predict(best.tree1, cdtest1, type = 'class')
+table_mat1 = table(cdtest$target, predict_unseen1)
+table_mat1
+```
+
+```{r, cache=TRUE, include=FALSE}
+accuracy_Test1 = sum(diag(table_mat1)) / sum(table_mat1)
+#print(paste('Accuracy for test data is: ', accuracy_Test1))
+```
+The accuracy of the fit in this case is `r accuracy_Test1`.
+
+
+
+
+
+
+
+
+
+```{r eval=FALSE, fig.height=5, fig.width=5, include=FALSE}
+
+table(cdtest$target) # target in test dataset:
+
+
+pred <- predict(best.tree1, cdtest1, type = 'prob')
+pred2 <-prediction(pred[,2],cdtest$target)
+
+roc1 = performance(pred2, "tpr","fpr")
+
+
+plot(roc1, 
+     colorize = T,
+     main = "ROC Curve",
+     ylab = "Sensitiviy",
+     xlab = "1 - Specifity",lwd =3)
+    
+abline(a=0,b=1, col ="blue",lwd =2)
+
+
+```
+
+
+```{r include=FALSE,cache = TRUE}
+set.seed(99)
+big.tree2 = rpart(target~., data = cdtrain, method = 'class', control = rpart.control(minsplit = 3, cp = 0.00001 ))
+nbig2 = length(unique(big.tree2$where))
+#cat("Size of big tree:", nbig2, "\n")
+```
+
+
+
+
+```{r,cache = TRUE, echo=FALSE}
+iibest2 = which.min(big.tree2$cptable[,"xerror"]) #which has the lowest error
+bestcp2 = big.tree2$cptable[iibest2,"CP"]
+bestsize2 = big.tree2$cptable2[iibest2,"nsplit"]+1
+
+```
+
+```{r, cache = TRUE, include=FALSE}
+best.tree2 = prune(big.tree2, cp=bestcp2)
+nbest2 = length(unique(best.tree2$where))
+cat("size of best tree: ", nbest2,"\n")
+
+```
+
+We have now included three more features to the set of predictive variables. These additional features are `duration_ms`, `instrumentalness`,  and `valence`. This time we initially fit a big tree of size `r nbig2` and then prune it back to the size of best tree which is `r nbest2`. 
+
+
+```{r, echo=FALSE, fig.height=3, fig.width=6, cache=TRUE}
+plotcp(big.tree2,lwd =3, col = 'blue',lty  = 5)
+```
+
+```{r  include=FALSE}
+predict_unseen2 = predict(best.tree2, cdtest, type = 'class')
+table_mat2 = table(cdtest$target, predict_unseen2)
+table_mat2
+accuracy_Test2 = sum(diag(table_mat2)) / sum(table_mat2)
+print(paste('Accuracy for test data is: ', accuracy_Test2))
+```
+
+The accuracy of this fit on the test data is `r accuracy_Test2` which is significantly better than our previous fit. Following figure shows the  tree of optimal size. 
+
+```{r, fig.width= 15, fig.height=7.5,cache = TRUE, echo=FALSE}
+rpart.plot(best.tree2,split.cex=1.0,cex=1.3,type=1,extra="auto")
+```
+
+```{r eval=FALSE, fig.height=5, fig.width=5, include=FALSE}
+
+
+####### ROC CURVE:
+
+table(cdtest$target) # target in test dataset:
+
+
+pred2 <- predict(best.tree2, cdtest, type = 'prob')
+
+pred3 <-prediction(pred2[,2],cdtest$target)
+roc = performance(pred3, "tpr","fpr")
+
+
+plot(roc, 
+     colorize = T,
+     main = "ROC Curve",
+     ylab = "Sensitiviy",
+     xlab = "1 - Specifity",lwd =3)
+    
+abline(a=0,b=1, col ="blue",lwd =2)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Random Forests (Sinta)
+
+## Bossting (Penny)
+
+
 ## Neural Nets
+```{r}
+size = seq(5, 100, by = 5)
+decay = c(0.0001,0.001, 
+          seq(0.0025, 0.01, by = 0.0025), 
+          .025, 0.05, 0.075,0.1, 0.25, 0.5)
 
-####to do: explanations coming soon, commenting code
+expGrid = expand.grid(size = seq(5, 100, by = 5), 
+                   decay = c(0.0001,0.001, seq(0.0025, 0.01, by = 0.0025), 
+                             0.025, 0.05, 0.075,0.1, 0.25, 0.5))
+```
 
-We begin with the simplest model we can fit based on the three main predictors that we have used for the previous models, `danceability`, `speachiness`,  `acousticness`. We will use a single-layer neural network to fit on the training data. For optimization we will begin by using a grid search accross of layer size. We also want to introduce regularization so we will include those in our grid as well.
+We begin with the simplest model we can fit based on the three main predictors that we have used for the previous models, `danceability`, `speachiness`,  `acousticness`. We will use a single-layer neural network to fit on the training data. For optimization we will begin by using a grid search accross of layer size. We also want to introduce regularization through weight decay so we will include those in our grid as well. The values traversed through are:
+
+```{r}
+kable(t(size), caption = "Size Grid")
+kable(t(decay), caption = "Decay Grid")
+```
 
 ```{r}
 #functions to scale on 0-1
@@ -206,7 +454,7 @@ sTest$target = as.factor(sTest$target)
 
 ```{r}
 #create new train/validation split for initial search
-trainValsplits <- function(i = 10,vpercent){
+trainValsplits <- function(i = 10, vpercent){
   set.seed(i)
   trainN = nrow(sTrain)
   verifyInd = sample(1:trainN,floor(vpercent*trainN))
@@ -215,7 +463,7 @@ trainValsplits <- function(i = 10,vpercent){
 ```
 
 ```{r}
-#train on training data for various fits and verify
+#function to train on training data for various fits and verify
 fitModel <- function(dat, grid, verifyInd)
 {
   nV= dat[verifyInd,]
@@ -234,6 +482,7 @@ fitModel <- function(dat, grid, verifyInd)
   }
   return(grid1)
 }
+
 ```
 
 ```{r}
@@ -243,34 +492,38 @@ nnTest1 = sTest[,c("target","danceability","speechiness", "acousticness")]
 ```
 
 ```{r, cache = TRUE}
-expGrid = expand.grid(size = seq(5, 100, by = 5), 
-                   decay = c(0.0001,0.001, seq(0.0025, 0.01, by = 0.0025), 
-                             0.025, 0.05, 0.075,0.1, 0.25, 0.5))
-
-expGrid
-
 #interesting seeds: 192, 1959, 
-split = trainValsplits(i = 211, vpercent = .30)
+
+#create test and validation splits and view them at
+#all combinations oof parameters
+split = trainValsplits(i = 1959, vpercent = .25)
 outGrid = fitModel(dat = nnTrain1, grid = expGrid, verifyInd = split)
  
 #order outputs from large grid 
 ord = order(outGrid$acc, decreasing = TRUE)
-topFits = outGrid[ord[1:2],]
-midFits = outGrid[c(ord[(floor(length(ord)/3))],ord[2*(floor(length(ord)/3))]),]
+topFits = outGrid[ord[1],]
+midFits = outGrid[c(ord[(floor(length(ord)/4))],ord[(floor(length(ord)/2))],ord[3*(floor(length(ord)/4))]),]
 lastFit = outGrid[ord[length(ord)],]
 fits = rbind(topFits,midFits,lastFit)
 ```
 
-```{r, fig.height= 8, cache = TRUE}
-runs = 20 #500 #set low to save time, change to 250-500 in last compilation, takes like 5 mins to run
+For an initial grid optimization based on the expansion of the grid over sizes/decay rates, we hold out 25% of the data training data for a validation set and compare the methods based on accuracy after fitting on what remains in the training set. This gives us a basis of what parameters will work well, but we will see that these can be unrelaible and very biased to the data. We sort the fits based on their accuracy, and then use the following candidates as parameters from the following fits for comparison:  the first two best fits, the 25th/50th/75th percentiles, and the worst fit. These are:
+
+```{r}
+kable(fits, caption = "Various Parameters Considered", row.names =FALSE)
+```
+The following box plots show how these parameters fair against eachother over various random splits of the train/validation splits based on accuracy, specificity, and sensitiviy. We iterate serveral times to obtain these distributions. 
+
+```{r, fig.height= 8, cache = TRUE, message="FALSE", warn = "FALSE"}
+runs = 10 #500 #set low to save time, change to 250-500 in last compilation, takes like 5 mins to run
 keep = runs*nrow(fits)
 keeps = matrix(0, nrow = keep, ncol = 4)
 keeps = data.frame(keeps)
 keeps[,1] = rep(paste("Size",fits$size,"Rates",fits$decay, sep = ""),runs)
 
 for(j in 1:runs){
-  split =  trainValsplits(j, vpercent = .30)
-  outGrid = fitModel(dat = nnTrain1, grid = fits[,1:2], verifyInd = split)
+  split1 =  trainValsplits(j, vpercent = .25)
+  outGrid = fitModel(dat = nnTrain1, grid = fits[,1:2], verifyInd = split1)
   keeps[(j*5-4):(j*5),2:4] = outGrid[,3:5]
 }
 
@@ -283,10 +536,11 @@ keepsMelt = melt(keeps,
 
 ggplot(keepsMelt, aes(x = SizeRate, y = Percentage)) + 
   geom_boxplot() + 
-  facet_wrap( ~Measure , ncol = 1)
+  facet_wrap( ~Measure , ncol = 1, scales = "free_y")
 ```
-####explain how biased fits are as one of the 'best fits' of a single split doesn't operate the same for splits. other splits
-####explain why spotify might care more about specificity vs sensitivity. If the person is a music lover in general who dooens't stick to one genre or music style they care way more about Specificity because the use probably likes more than they don't like so finding the don't likes are more important vs. somoneone who has limited music taste. Getting the likes categorized are the most important. 
+
+Over `r runs` interations we have a comparison of these methods, and we see that what we though would provide parameters for the best fit do not always appear to fit just as well. While our prediction problem is not a matter of life or death, we conside measures like specificity/sensitivity can be used to choose the parameters. Intuitively, It may be the case that we can identify who likes quite a bit of music in general, and we are more concerned with classifying the songs that they wouldn't like, rather than they would. Then it would be logical to include specificity in our search for good parameters. The oppositive can be said about people who are very picky about music. We include an ROC plot of the fit models based on their fits. 
+
 ```{r}
 #ROC Plot Code
 plotROC <- function(pihat, ytrue, add = TRUE, col = '#791b19') {
@@ -329,6 +583,7 @@ outpred4 = data.frame(rawProbs = predict(fit4, nnTest1,c("raw")))
 outpred5 = data.frame(rawProbs = predict(fit5, nnTest1,c("raw")))
 preds = cbind(outpred1,outpred2,outpred3,outpred4,outpred5)
 
+
 #colors and plot
 cO = c("#000080","#791b19", "#DAA520", "#228B22", "#A9A9A9")
 {
@@ -352,53 +607,253 @@ cO = c("#000080","#791b19", "#DAA520", "#228B22", "#A9A9A9")
 }
 ```
 
-```{r}
-#Performance
-perf1= performance(prediction(
-  predict(fit1, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
-perf2= performance(prediction(
-  predict(fit2, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
-perf3= performance(prediction(
-  predict(fit3, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
-perf4= performance(prediction(
-  predict(fit4, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
-perf5= performance(prediction(
-  predict(fit5, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
-lperfs = list(perf1,perf2,perf3,perf4,perf5)
+It appears that predictions for most methods look apporximately the same. The only method that falls completely off from the mark is the very last one. We do see regions where our supposed 'best fit' from our initial serach would not have the best accuracy, but the difference isn't extreme. 
 
+```{r, results = 'asis'}
+#Test prediction accuracy
+z1 = confusionMatrix(as.factor(ifelse((preds[,1])>0.5,"1","0")),
+                     nnTest1$target)$overall[1]
+z2 = confusionMatrix(as.factor(ifelse((preds[,2])>0.5,"1","0")),
+                     nnTest1$target)$overall[1]
+z3 = confusionMatrix(as.factor(ifelse((preds[,3])>0.5,"1","0")),
+                     nnTest1$target)$overall[1]
+z4 = confusionMatrix(as.factor(ifelse((preds[,4])>0.5,"1","0")),
+                     nnTest1$target)$overall[1]
+z5 = confusionMatrix(as.factor(ifelse((preds[,5])>0.5,"1","0")),
+                     nnTest1$target)$overall[1]
+testFits = cbind(fits[,1:2], accuracy = c(z1,z2,z3,z4,z5)) 
+orderFits = order(testFits$accuracy, decreasing = TRUE)
+kable(testFits[orderFits,], caption = "Test Accuracy")
+```
+
+```{r}
+# Performance
+# perf1= performance(prediction(
+#   predict(fit1, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+# p3erf2= performance(prediction(
+#   predict(fit2, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+# perf3= performance(prediction(
+#   predict(fit3, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+# perf4= performance(prediction(
+#   predict(fit4, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+# perf5= performance(prediction(
+#   predict(fit5, nnTest1,c("raw")), nnTest1$target), "tpr","rpp")
+# lperfs = list(perf1,perf2,perf3,perf4,perf5)
+# 
+# {
+#   plot(0, col = "white",xlim = c(0,1), ylim = c(0,1),
+#   main = "Cummulative Gains", ylab = "Treu Positive Rate", xlab = "Rate of Positive Predictions") 
+#   abline(a = 0, b = 1, lty = 2, col = "#000000", bty = 'n')
+#   for(i in 1:length(lperfs)){
+#     plot(lperfs[[i]], add = TRUE, colorize = FALSE, col = cO[i])
+#   }
+#   legend("bottomright", 
+#   legend = c("Fit1", "Fit2", "Fit3", "Fit4", "Fit5"), 
+#   col = cO,
+#   pch = c(17,17,17,17,17), 
+#   bty = "n", 
+#   pt.cex = 1, 
+#   cex = 1, 
+#   text.col = "black", 
+#   horiz = F , 
+#   inset = c(0.1, 0.1))
+# } 
+```
+
+Now we consider how neural networks compare when we use all of the predictors rather than just the three we originally looked at. We fit on various parameters again and compare different candidates based on their accuracy between random train/validation splits witihin the allocated training data. We first noticed that the fits improved immediately by including other predictors, but the same problem arose where we overfit to the data and even though our validation set pointed us in the direction of the top parameters, they weren't great when testing. Just choosing the worst, best, and candidates in between so we tried something else. 
+
+Instead of just picking candidates only from an initial train/validation split, we start with our initial fits remove a fourth of the candidates iteratively by sorting the carndidates on accuracy on the current validation set, we split the training data once again and add the new accuracy too the current after refitting on this split. We repeat the proceedure until only 5 parameter combinations are left and then we average over the values of accuracy and sort once again for our choice of the top 5 models. The following are the results we ended up with for candidates and their ROC curves. We also include parameters chosen at the percentiles of accuracy again from the first train/validatioon split. 
+
+```{r}
+#function to train on training data for various fits and verify
+fitModel <- function(dat, grid, verifyInd)
 {
-  plot(0, col = "white",xlim = c(0,1), ylim = c(0,1),
-  main = "Cummulative Gains", ylab = "Treu Positive Rate", xlab = "Rate of Positive Predictions") 
-  abline(a = 0, b = 1, lty = 2, col = "#000000", bty = 'n')
-  for(i in 1:length(lperfs)){
-    plot(lperfs[[i]], add = TRUE, colorize = FALSE, col = cO[i])
+  nV= dat[verifyInd,]
+  nT = dat[-verifyInd,]
+   
+  grid1 = cbind(grid, acc=1, sens=1, spec=1)
+  for(i in 1:nrow(grid)){
+    fit = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence, 
+               nT, size = grid[i,1], decay = grid[i,2], linout=FALSE, 
+               trace = FALSE)
+    outpred = data.frame(rawProbs = predict(fit, nV,c("raw")))
+    outpred$class = as.factor(predict(fit, nV,c("class")))
+    z = confusionMatrix(nV$target,outpred$class)
+    grid1[i,4:5] = z$byClass[1:2]
+    grid1[i,3] = z$overall[1]
   }
-  legend("bottomright", 
-  legend = c("Fit1", "Fit2", "Fit3", "Fit4", "Fit5"), 
-  col = cO,
-  pch = c(17,17,17,17,17), 
-  bty = "n", 
-  pt.cex = 1, 
-  cex = 1, 
-  text.col = "black", 
-  horiz = F , 
-  inset = c(0.1, 0.1))
+  return(grid1)
 }
 ```
 
-###to do: Choose different cut off for classification than 0.5 and explain why spotify might do this... based on specificty/sensitivity. We want to reduce fpr, better to make a playlist of more good songs that letting in more songs they wouldn't like. Minimize fpr on sensitivity vs. specificity. Refit using new classification rule. pick best fit from these and show confusion matrix, show accuracy.  
+```{r, cahce = TRUE}
+# nnTrain2 = sTrain
+# nnTest2 = sTest
+# 
+# #create test and validation splits and view them at
+# #all combinations oof parameters
+# outGrid = fitModel(dat = nnTrain2, grid = expGrid, verifyInd = split)
+# outGrid1 = outGrid 
+# count = 1
+# for (i in 1:20){
+#   if(nrow(outGrid) > 6){
+#     nleave = floor(nrow(outGrid)/4)
+#     ord = order(outGrid$acc, decreasing = TRUE)
+#     left = outGrid[ord,] 
+#     left1 = left[(1:(nrow(left)-nleave)),]
+#     outGrid = left1 
+#     outGrid[,3:5] = left1[,3:5] + fitModel(dat = nnTrain2, grid = left1[,1:2], verifyInd = trainValsplits(count, vpercent = .25))[,3:5]
+#     count = count + 1
+#   }
+# }
+# 
+# fits = outGrid
+# fits[,3:5] = fits[,3:5]/count
+# fits = fits[1:5,]
+# 
+# kable(fits)
+```
 
-####To do: fit NN on all predictors and smaller grid of sizes/rates...try regularization decay rates = c(0.001, 0.01, 0.05, 0.1, 0.25) sizes = c(5,15,25,75). Say/show something about why regularization should provide similar fit to above. (Consider fitting model over several splits again again on different models and view box plot?? might take too long if I use more thatn 100 again..)
+Using candidates at the same positions before
 
-#### ROCs/Gains/Classificiation rule/Confusion matrix on best
+```{r}
+# fit1 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence,
+#                nnTrain2, size = fits[1,1], decay = fits[1,2], linout=FALSE, 
+#                trace = FALSE)
+# fit2 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence,
+#                nnTrain2, size = fits[2,1], decay = fits[2,2], linout=FALSE, 
+#                trace = FALSE)
+# fit3 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence, 
+#                nnTrain2, size = fits[3,1], decay = fits[3,2], linout=FALSE, 
+#                trace = FALSE)
+# fit4 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence, 
+#                nnTrain2, size = fits[4,1], decay = fits[4,2], linout=FALSE, 
+#                trace = FALSE)
+# fit5 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence, 
+#                nnTrain2, size = fits[5,1], decay = fits[5,2], linout=FALSE, 
+#                trace = FALSE)
+# 
+# outpred1 = data.frame(rawProbs = predict(fit1, nnTest2,c("raw")))
+# outpred2 = data.frame(rawProbs = predict(fit2, nnTest2,c("raw")))
+# outpred3 = data.frame(rawProbs = predict(fit3, nnTest2,c("raw")))
+# outpred4 = data.frame(rawProbs = predict(fit4, nnTest2,c("raw")))
+# outpred5 = data.frame(rawProbs = predict(fit5, nnTest2,c("raw")))
+# preds = cbind(outpred1,outpred2,outpred3,outpred4,outpred5)
+# 
+# 
+# #colors and plot
+# cO = c("#000080","#791b19", "#DAA520", "#228B22", "#A9A9A9")
+# {
+#   plot(0, col = "white",xlim = c(0,1), ylim = c(0,1),
+#   main = "ROC Plot", ylab = "True Positive Rate", xlab = "False Positive") 
+#   abline(a = 0, b = 1, lty = 2, col = "#000000", bty = 'n')
+#   
+#   for (j in 1:length(fits$size)){
+#     plotROC(preds[,j], nnTest1 , add = TRUE, col = cO[j])
+#   } 
+#   legend("bottomright", 
+#   legend = c("Fit1", "Fit2", "Fit3", "Fit4", "Fit5"), 
+#   col = cO,
+#   pch = c(17,17,17,17,17), 
+#   bty = "n", 
+#   pt.cex = 1, 
+#   cex = 1, 
+#   text.col = "black", 
+#   horiz = F , 
+#   inset = c(0.1, 0.1))
+# }
+```
 
-#### Add cost functions for fits as well???
+```{r}
+#Test prediction accuracy
+# z1 = confusionMatrix(as.factor(ifelse((preds[,1])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# z2 = confusionMatrix(as.factor(ifelse((preds[,2])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# z3 = confusionMatrix(as.factor(ifelse((preds[,3])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# z4 = confusionMatrix(as.factor(ifelse((preds[,4])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# z5 = confusionMatrix(as.factor(ifelse((preds[,5])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# testFits = cbind(fits[,1:2], accuracy = c(z1,z2,z3,z4,z5)) 
+# orderFits = order(testFits$accuracy, decreasing = TRUE)
+# kable(testFits[orderFits,], caption = "Test Accuracies")
+```
 
-#### Confusioon matrix plots??
 
-## Deep Neural Nets (Antonio)
+```{r}
+# ord = order(outGrid1$acc, decreasing = TRUE)
+# topFits = outGrid1[ord[1],]
+# midFits = outGrid1[c(ord[(floor(length(ord)/4))],ord[(floor(length(ord)/2))],ord[3*(floor(length(ord)/4))]),]
+# lastFit = outGrid1[ord[length(ord)],]
+# fits = rbind(topFits,midFits,lastFit)
+```
 
-####play with 2-3 layers with smallest ammount of predictors. If worse than 1 layer neural net stop there. 
+```{r}
+# fit1 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence,
+#                nnTrain2, size = fits[1,1], decay = fits[1,2], linout=FALSE, 
+#                trace = FALSE)
+# fit2 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence,
+#                nnTrain2, size = fits[2,1], decay = fits[2,2], linout=FALSE, 
+#                trace = FALSE)
+# fit3 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence, 
+#                nnTrain2, size = fits[3,1], decay = fits[3,2], linout=FALSE, 
+#                trace = FALSE)
+# fit4 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence, 
+#                nnTrain2, size = fits[4,1], decay = fits[4,2], linout=FALSE, 
+#                trace = FALSE)
+# fit5 = nnet(target ~ danceability+speechiness+acousticness+duration_ms+instrumentalness+valence, 
+#                nnTrain2, size = fits[5,1], decay = fits[5,2], linout=FALSE, 
+#                trace = FALSE)
+# 
+# outpred1 = data.frame(rawProbs = predict(fit1, nnTest2,c("raw")))
+# outpred2 = data.frame(rawProbs = predict(fit2, nnTest2,c("raw")))
+# outpred3 = data.frame(rawProbs = predict(fit3, nnTest2,c("raw")))
+# outpred4 = data.frame(rawProbs = predict(fit4, nnTest2,c("raw")))
+# outpred5 = data.frame(rawProbs = predict(fit5, nnTest2,c("raw")))
+# preds = cbind(outpred1,outpred2,outpred3,outpred4,outpred5)
+# 
+# 
+# #colors and plot
+# cO = c("#000080","#791b19", "#DAA520", "#228B22", "#A9A9A9")
+# {
+#   plot(0, col = "white",xlim = c(0,1), ylim = c(0,1),
+#   main = "ROC Plot", ylab = "True Positive Rate", xlab = "False Positive") 
+#   abline(a = 0, b = 1, lty = 2, col = "#000000", bty = 'n')
+#   
+#   for (j in 1:length(fits$size)){
+#     plotROC(preds[,j], nnTest1 , add = TRUE, col = cO[j])
+#   } 
+#   legend("bottomright", 
+#   legend = c("Fit1", "Fit2", "Fit3", "Fit4", "Fit5"), 
+#   col = cO,
+#   pch = c(17,17,17,17,17), 
+#   bty = "n", 
+#   pt.cex = 1, 
+#   cex = 1, 
+#   text.col = "black", 
+#   horiz = F , 
+#   inset = c(0.1, 0.1))
+#}
+```
+
+```{r}
+#Test prediction accuracy
+# z1 = confusionMatrix(as.factor(ifelse((preds[,1])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# z2 = confusionMatrix(as.factor(ifelse((preds[,2])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# z3 = confusionMatrix(as.factor(ifelse((preds[,3])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# z4 = confusionMatrix(as.factor(ifelse((preds[,4])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# z5 = confusionMatrix(as.factor(ifelse((preds[,5])>0.5,"1","0")),
+#                      nnTest1$target)$overall[1]
+# testFits = cbind(fits[,1:2], accuracy = c(z1,z2,z3,z4,z5)) 
+# orderFits = order(testFits$accuracy, decreasing = TRUE)
+# kable(testFits[orderFits,], caption = "Test Accuracy")
+```
 
 ####Summary oof metrics of thre 
 
