@@ -107,23 +107,29 @@ kable(print2, caption = "Data Dimensions")
 
 We include a correlation heat plot. For this analysis we have droped the last two features 'song_title' and 'artist_name', which we do not use in our final analysis as well as those previously dropped.  
 
-```{r, message = FALSE, warning = FALSE}
-df2_cor = cor(as.matrix(df2[,1:14]))
-corrplot(df2_cor, method="color",type = "lower")
-#df2_cor
+
+```{r warning=FALSE, include=FALSE,cache = TRUE}
+
+df3 = df2[,1:14]
+df3_cor <- df3 %>% 
+  correlate() %>% 
+  focus(target)
+df3_cor
+
 ```
-The results of this plot tells us that `instrumentalness`, `danceability`, `speechiness`, and `acousticness` are among the most correlated with the the target variable. 
 
-#### Correlation of other feautres with 'target':
+```{r echo=FALSE, echo=FALSE, fig.height=3, fig.width=8,cache = TRUE}
+yy <- data.frame(Features = df3_cor$term,
+                 Correlations = df3_cor$target )
 
+cor_plot <- ggplot(data = yy, aes(x=Correlations, y=Features,fill=Correlations)) +
+  geom_bar(stat="identity") +theme_minimal()+
+  ggtitle("Correlations of 'target'  with rest of the featurs") +
+  xlab("Correlations") + ylab("Features")
+cor_plot
 
-# 3 Features selection based on correlations with 'target':
-###### acousticness
-###### danceability				
-###### duration_ms				
-###### instrumentalness				
-###### speechiness	
-###### valence
+```
+The results of this plot tells us that `instrumentalness`, `danceability`, `speechiness`, and `acousticness` are among the most correlated with the the target variable. Additionally, `uration_ms`,	`instrumentalness` and `valence` relatively higher correlations as compared to the remaining features. 
 
 
 ```{r}
@@ -131,6 +137,21 @@ df4 = df3[,c(14,1,2,3,5,10,13)]
 head(df4)
 ncol(df4)
 ```
+## Test Train split
+```{r}
+n = nrow(df4)
+set.seed(99)
+pin = .75
+ii = sample(1:n,floor(pin*n))
+cdtrain = df4[ii,]
+cdtest = df4[-ii,]
+cat("dimension of train data:",dim(cdtrain),"\n")
+## dimension of train data: 750 3
+cat("dimension of test data:",dim(cdtest),"\n")
+## dimension of test data: 250 3
+
+```
+
 
 #4 Models  
 The potential methods to build a calcification model for this project include:
@@ -210,42 +231,187 @@ NBaccuracy
 ```
 It shows that the highest accuracy is obtained from the Naive Bayes model that uses all the 6 predictors with accuracy of `r NBaccuracy1`.
 
-## Decision Trees (Atta)
+## Decision Trees 
+
+```{r ,echo=FALSE, cache=FALSE}
+cdtrain1 = cdtrain[,c(1,2,3,6)]
+cdtest1 = cdtest[,c(1,2,3,6)]
+## Decision Trees  1 ()
+big.tree1 = rpart(target ~ . ,method ="class",data = cdtrain1, control = rpart.control(minsplit=3, cp = 0.003))
+nbig1 = length(unique(big.tree1$where))
+#cat("size of big tree: ",nbig1,"\n")
+# get nice tree from CV results
+iibest1 = which.min(big.tree1$cptable[,"xerror"]) #which has the lowest error
+bestcp1 = big.tree1$cptable[iibest1,"CP"]
+bestsize1 = big.tree1$cptable[iibest1,"nsplit"]+1
+#bestsize1
+
+```
+We fit a big tree of size `r nbig1` on the training data using using only three features 'danceability', 'speachiness' and 'acousticnes'.  As suggested by the minimum cross validation relative error, the best size for our fits is `r bestsize1`.
+
+```{r, echo=FALSE, fig.height=3, fig.width=6, cache=TRUE}
+plotcp(big.tree1,lwd =3, col = 'blue',lty  = 5)
+
+```
+
+```{r cache=FALSE, include=FALSE}
+# get nice tree from CV results
+iibest1 = which.min(big.tree1$cptable[,"xerror"]) #which has the lowest error
+bestcp1 = big.tree1$cptable[iibest1,"CP"]
+bestsize1 = big.tree1$cptable[iibest1,"nsplit"]+1
+bestsize1
+```
+We prune the big tree to a tree of size `r bestsize1` as shown in the following figure. Although `acounstiness` was included among the predictive variables, but from the plot we observe that it does not play any rule decision making.
+
+```{r cache=FALSE, include=FALSE,cache = TRUE}
+best.tree1 = prune(big.tree1,cp = bestcp1)
+nbest1 = length(unique(best.tree1$where))
+cat("size of best tree: ", nbest1,"\n")
+```
+
+```{r echo=FALSE, fig.width=8, cache = TRUE, fig.height=2,cache = TRUE}
+rpart.plot(best.tree1, split.cex=0.9,cex=0.9,type=2,extra="auto")
+```
+```{r, include=FALSE}
+predict_unseen1 = predict(best.tree1, cdtest1, type = 'class')
+table_mat1 = table(cdtest$target, predict_unseen1)
+table_mat1
+```
+
+```{r, cache=TRUE, include=FALSE}
+accuracy_Test1 = sum(diag(table_mat1)) / sum(table_mat1)
+#print(paste('Accuracy for test data is: ', accuracy_Test1))
+```
+The accuracy of the fit in this case is `r accuracy_Test1`.
+
+
+
+
+
+
+
+
+
+```{r eval=FALSE, fig.height=5, fig.width=5, include=FALSE}
+
+table(cdtest$target) # target in test dataset:
+
+
+pred <- predict(best.tree1, cdtest1, type = 'prob')
+pred2 <-prediction(pred[,2],cdtest$target)
+
+roc1 = performance(pred2, "tpr","fpr")
+
+
+plot(roc1, 
+     colorize = T,
+     main = "ROC Curve",
+     ylab = "Sensitiviy",
+     xlab = "1 - Specifity",lwd =3)
+    
+abline(a=0,b=1, col ="blue",lwd =2)
+
+
+```
+
+
+```{r include=FALSE,cache = TRUE}
+set.seed(99)
+big.tree2 = rpart(target~., data = cdtrain, method = 'class', control = rpart.control(minsplit = 3, cp = 0.00001 ))
+nbig2 = length(unique(big.tree2$where))
+#cat("Size of big tree:", nbig2, "\n")
+```
+
+
+
+
+```{r,cache = TRUE, echo=FALSE}
+iibest2 = which.min(big.tree2$cptable[,"xerror"]) #which has the lowest error
+bestcp2 = big.tree2$cptable[iibest2,"CP"]
+bestsize2 = big.tree2$cptable2[iibest2,"nsplit"]+1
+
+```
+
+```{r, cache = TRUE, include=FALSE}
+best.tree2 = prune(big.tree2, cp=bestcp2)
+nbest2 = length(unique(best.tree2$where))
+cat("size of best tree: ", nbest2,"\n")
+
+```
+
+We have now included three more features to the set of predictive variables. These additional features are `duration_ms`, `instrumentalness`,  and `valence`. This time we initially fit a big tree of size `r nbig2` and then prune it back to the size of best tree which is `r nbest2`. 
+
+
+```{r, echo=FALSE, fig.height=3, fig.width=6, cache=TRUE}
+plotcp(big.tree2,lwd =3, col = 'blue',lty  = 5)
+```
+
+```{r  include=FALSE}
+predict_unseen2 = predict(best.tree2, cdtest, type = 'class')
+table_mat2 = table(cdtest$target, predict_unseen2)
+table_mat2
+accuracy_Test2 = sum(diag(table_mat2)) / sum(table_mat2)
+print(paste('Accuracy for test data is: ', accuracy_Test2))
+```
+
+The accuracy of this fit on the test data is `r accuracy_Test2` which is significantly better than our previous fit. Following figure shows the  tree of optimal size. 
+
+```{r, fig.width= 15, fig.height=7.5,cache = TRUE, echo=FALSE}
+rpart.plot(best.tree2,split.cex=1.0,cex=1.3,type=1,extra="auto")
+```
+
+```{r eval=FALSE, fig.height=5, fig.width=5, include=FALSE}
+
+
+####### ROC CURVE:
+
+table(cdtest$target) # target in test dataset:
+
+
+pred2 <- predict(best.tree2, cdtest, type = 'prob')
+
+pred3 <-prediction(pred2[,2],cdtest$target)
+roc = performance(pred3, "tpr","fpr")
+
+
+plot(roc, 
+     colorize = T,
+     main = "ROC Curve",
+     ylab = "Sensitiviy",
+     xlab = "1 - Specifity",lwd =3)
+    
+abline(a=0,b=1, col ="blue",lwd =2)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Random Forests (Sinta)
 
 ## Bossting (Penny)
 
-## Test Train split
-```{r}
-n = nrow(df4)
-set.seed(99)
-pin = .75
-ii = sample(1:n,floor(pin*n))
-cdtrain = df4[ii,]
-cdtest = df4[-ii,]
-cat("dimension of train data:",dim(cdtrain),"\n")
-## dimension of train data: 750 3
-cat("dimension of test data:",dim(cdtest),"\n")
-## dimension of test data: 250 3
 
-```
-
-```{r}
-fit = rpart(target~., data = cdtrain, method = 'class')
-#rpart.plot(fit, extra = 106)
-```
-
-```{r}
-predict_unseen = predict(fit, cdtest, type = 'class')
-table_mat = table(cdtest$target, predict_unseen)
-table_mat
-```
-
-```{r}
-accuracy_Test = sum(diag(table_mat)) / sum(table_mat)
-print(paste('Accuracy for test data is: ', accuracy_Test))
-```
 ## Neural Nets
 ```{r}
 size = seq(5, 100, by = 5)
