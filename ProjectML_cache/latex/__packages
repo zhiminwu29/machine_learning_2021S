@@ -28,3 +28,6 @@ nnet
 caret
 reshape2
 ROCR
+gridExtra
+pROC
+e1071
