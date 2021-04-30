@@ -1014,8 +1014,16 @@ cO = c("#000080","#791b19", "#DAA520", "#228B22", "#A9A9A9")
 
 
 ##7 Conclusion 
-## lgt, 64.5%, naive bayes, 65.2%,dt69.4%,  boosting = 73.6 percent, neural nets,  nnts, 72.6 %
 
 In our project, our goal is to classify if a user would like a song using data downloaded from the Spotify. We have used five machine learning methods for our classification problem and evaluated different methods’ performances on the same test set for comparison. We started with simple linear models such as the logistic regression and Naive Bayes, then moved onto nonlinear methods: decision trees, boosting and neural nets. We wanted to use simpler methods as a baseline to compare with more complicated methods. We plotted the ROC curves of each method together for comparison, and it is shown that overall nonlinear methods outperform linear methods. Logistic regression and Naive Bayes have equivalent performances to each other according to the ROC curves but they both have less accuracy and AUC than the other nonlinear methods. However, their results are still comparable to the nonlinear methods as we see that the accuracy of linear methods is around 65% and the accuracy of decision tree is 69%. 
 
 Another take away from the process of building the classification model is that variable selection is crucial. Having more variables in the model tends to provide better accuracy. However, more variables will also increase the complexity of the model. Therefore, in this project, we always start from a simple model using a few variables and add more variables as we go. For example, when using Naive Bayes, we start building a model using one variable to six variables with different combinations. The two models with the best accuracy are the model with six variables and three variables instead of five or four variables. This shows that variable selection is essential in developing the model.
+
+In terms of accuracy, the non-linear models are still performing batter, and in particular, 
+the Boosting classifier has outperformed all of the models with the highest accuracy of 73.6%. The other model that comes closer to Boosting is the Neural Nets. Both of the linear models, Logistic Regression and Naive Bayes give the almost the same accuracy of 65%. The decision trees are in the middle with an accuracy of 69.4%. The following table is summary of the accuracy scores.  
+
+```{r echo=FALSE}
+acc_table <- data.frame("Model Name" = c("Logistic Regression" , "Naive Nayes ", "Decision Trees", "Boosting", "Neural Nets"),
+                        "Scores" =c(64.5, 65.2, 69.4, 73.6, 72.6) )
+kable(acc_table, caption = "Accuracy Scores (in Percenated)")
+```
