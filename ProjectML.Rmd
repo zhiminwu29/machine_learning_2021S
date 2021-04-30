@@ -24,7 +24,7 @@ pkg.list <-c("randomForest", "gbm", "rpart",
              "randomForestExplainer",
              "corrr", "Hmisc", "corrplot",
              "knitr", 'nnet', 'caret',
-             'reshape2', 'ROCR')
+             'reshape2', 'ROCR','gridExtra')
 
 #install.packages(pkg.list)
 lapply(pkg.list, require, character.only = TRUE)
@@ -103,9 +103,9 @@ colnames(print2) <- c("rows", "columns")
 kable(print2, caption = "Data Dimensions")
 ```
 
-#### Correlation with Target (Correlation Matrix Heatmap): 
+#### Correlation among all features with Target 
 
-We include a correlation heat plot. For this analysis we have droped the last two features 'song_title' and 'artist_name', which we do not use in our final analysis as well as those previously dropped.  
+We include a correlation heat plot. For this analysis we have dropped the last two features 'song_title' and 'artist_name', which we do not use in our final analysis as well as those previously dropped.  
 
 
 ```{r warning=FALSE, include=FALSE,cache = TRUE}
@@ -132,6 +132,43 @@ cor_plot
 The results of this plot tells us that `instrumentalness`, `danceability`, `speechiness`, and `acousticness` are among the most correlated with the the target variable. Additionally, `uration_ms`,	`instrumentalness` and `valence` relatively higher correlations as compared to the remaining features. 
 
 
+
+#### Covariation between individual variables and target
+
+We also want to have a look at how individual variables may vary with `target` by plotting the density of some features grouped by the two levels of `target`. We plotted the density of acousticness, duration time, speechiness, and dancebility. We can tell that these features do have some dependency or covriation on our response variable `target`. These density plots also justify the results from our correlation heat plot. We will then choose those features with stronger correlations to the response variable for our predictive modeling. 
+
+```{r cache = TRUE,include=FALSE}
+
+dfp <- df3
+dfp$target <- as.character(dfp$target)
+dfp$duration_ms <- (dfp$duration_ms-min(dfp$duration_ms))/(max(dfp$duration_ms-min(dfp$duration_ms)))
+
+
+```
+
+```{r echo=FALSE, cache=TRUE,message=FALSE,warning=FALSE,fig.width=7, fig.height=4, fig.align="center"}
+      
+    p1<-ggplot(dfp,aes(fill = target,x=acousticness)) + 
+         geom_density(alpha=0.3)
+     
+    
+     
+     p2<-ggplot(dfp,aes(fill = target,x=duration_ms)) + 
+         geom_density(alpha=0.3)
+      
+      
+    p3<-ggplot(dfp,aes(fill = target,x=speechiness)) + 
+         geom_density(alpha=0.3)
+       
+    p4<-ggplot(dfp,aes(fill = target,x=danceability)) + 
+        geom_density(alpha=0.3)
+    
+    grid.arrange(p1,p2,p3,p4,  ncol = 2, nrow = 2)
+
+
+```
+
+
 ```{r}
 df4 = df3[,c(14,1,2,3,5,10,13)]
 head(df4)
@@ -156,7 +193,81 @@ cat("dimension of test data:",dim(cdtest),"\n")
 #4 Models  
 The potential methods to build a calcification model for this project include:
 
-## Logistic Regression (Penny)
+## Logistic Regression with one predictor
+
+We will use the same splits of train and test to build a logistic regression model for our problem. We want to start out simple, so let's use only one predictor to fit the train and predict on the test. Then we evaluate its performance using based on accuracy and ROC. Note: we will keep the probability threshold as 0.5 to separate the two levels of `target`.
+
+```{r, include=FALSE, cache=TRUE}
+
+# i just made different copies of the same splits that Atta did
+dfp2 = dfp[,c(14,1,2,3,5,10,13)]
+n = nrow(dfp2)
+set.seed(99)
+pin = .75
+ii = sample(1:n,floor(pin*n))
+train = dfp2[ii,]
+test = dfp2[-ii,]
+
+
+```
+
+```{r collapse=TRUE}
+      glm.fits=glm(as.factor(target)~speechiness,
+                   data=train,family=binomial)
+     # contrasts(as.factor(train$target))
+      #summary(glm.fits)
+
+    glm.probs=predict(glm.fits,newdata=test,type="response")
+    
+  
+    glm.pred=rep('0',length(glm.probs))
+    glm.pred[glm.probs >.5]='1'
+    
+    print('One-predictor logistic regression on the test: ')
+    confusionMatrix(as.factor(glm.pred),as.factor(test$target))$overall['Accuracy']
+      
+```
+
+```{r echo=FALSE, cache=TRUE,fig.width=7,fig.height=4}
+  #ROC curve
+    par(pty='s')
+    
+    roc(test$target, glm.probs,
+            plot=TRUE,legacy.axes=TRUE, percent=TRUE, main='ROC on the test',
+            xlab="False Positive Percentage", ylab="True Postive Percentage",print.auc=TRUE)
+```
+
+**Take away:**\
+The performance of one-predictor logistic regression is not very ideal, with 57.5% accuracy on and 60.5% of AUC the test. Even though it's not super ideal with such performance, it is still acceptable as we have such a simple model.
+
+## Logistic regression with multiple predictors
+
+Next we will try to use more than one predictors to fit logistic regression to compare with only one predictor.
+\
+Again, we fit on the train and predict on the test.
+```{r collapse=TRUE,cache=TRUE,warning=false,fig.width=7,fig.height=4}
+      glm.fits2=glm(as.factor(target)~speechiness+danceability+duration_ms+
+                      instrumentalness+acousticness,data=train,family=binomial)
+
+      #summary(glm.fits2)
+
+     glm.probs2=predict(glm.fits2,newdata=test,type="response")
+  
+    glm.pred2=rep('0',length(glm.probs2))
+    glm.pred2[glm.probs2 >.5]='1'
+    
+    print('Muti-predictor logistic regression on the test: ')
+    confusionMatrix(as.factor(glm.pred2),as.factor(test$target))$overall['Accuracy']
+    
+    #ROC CURVE
+    par(pty='s')
+    roc(test$target, glm.probs2,
+            plot=TRUE,legacy.axes=TRUE, percent=TRUE,main='ROC on the test',
+            xlab="False Positive Percentage", ylab="True Postive Percentage",print.auc=TRUE)
+```
+
+It does do a better job than the one-predictor model above, both accuracy and AUC are increased to 65% and 68% respectively on the test set. We want to start out experimenting with a simple model so that we can use it as a baseline to compare with more complicated models.
+
 
 ## Naive Bayes 
 
@@ -398,18 +509,104 @@ abline(a=0,b=1, col ="blue",lwd =2)
 
 
 
+## Boosting 
+
+Since there are three tuning parameters of the boosting model, we will use 8 different combinations of those parameters to fit the models on the train and chose the model that gives best performance on the validation data to predict for the test. Here are the choices for the three hyper-parameters:
+* maximum depth = 4 or 10
+* number of trees = 1000 or 5000
+* shrinkage = 0.001 or 0.2
+
+**Train, Validation and Test Split**
+In order to use the three-set approach, we keep the test set from the beginning but split the train into two subsets: a new train set and a validation set. 
+
+```{r, echo = TRUE, cache = TRUE,include=FALSE}
+
+set.seed(1722)
+
+ trainN = nrow(train)
+ vpercent = 0.25
+ verifyInd = sample(1:trainN,floor(vpercent*trainN))
+ # validation set for boosting
+ val = train[verifyInd,]
+ #new train set for boosting
+ ntrain = train[-verifyInd,]
+ trainval = rbind(train,val)
+
+```
+
+\
+Fit on the new train subset and predict on the validation set. We choose the probability threshold to be 0.5 to classify probability greater than 0.5 as the class '1', '0' otherwise.
+```{r, echo = TRUE, cache = TRUE}
+set.seed(122)
+boostfit1 = gbm(target~.,data = ntrain,distribution="bernoulli",
+interaction.depth = 4, n.trees = 1000,shrinkage = 0.2)
+#summary(boostfit1)
+
+boostfit2 = gbm(target~.,data=ntrain,distribution = "bernoulli",
+interaction.depth = 4, n.trees = 1000,shrinkage = 0.001)
+boostfit3 = gbm(target~.,data=ntrain,distribution = "bernoulli",
+interaction.depth =4, n.trees = 5000,shrinkage = 0.2)
+boostfit4 = gbm(target~.,data=ntrain,distribution = "bernoulli",
+interaction.depth = 4, n.trees = 5000, shrinkage = 0.001)
+boostfit5 = gbm(target~.,data=ntrain,distribution="bernoulli",
+interaction.depth = 10, n.trees = 1000,shrinkage = 0.2)
+boostfit6 = gbm(target~.,data=ntrain,distribution = "bernoulli",
+interaction.depth = 10, n.trees = 1000,shrinkage = 0.001)
+boostfit7 = gbm(target~.,data=ntrain,distribution = "bernoulli",
+interaction.depth = 10, n.trees = 5000,shrinkage = 0.2)
+boostfit8 = gbm(target~.,data=ntrain,distribution = "bernoulli",
+interaction.depth = 10, n.trees = 5000,shrinkage = 0.001)
+```
 
 
 
+```{r, echo = FALSE, cache = TRUE}
+bpred1 = predict(boostfit1, newdata = val, n.trees = 1000,type='response')
+bpred2 = predict(boostfit2, newdata = val, n.trees = 1000,type='response')
+bpred3 = predict(boostfit3, newdata = val, n.trees = 5000,type='response')
+bpred4 = predict(boostfit4, newdata = val, n.trees = 5000,type='response')
+bpred5 = predict(boostfit5, newdata = val, n.trees = 1000,type='response')
+bpred6 = predict(boostfit6, newdata = val, n.trees = 1000,type='response')
+bpred7 = predict(boostfit7, newdata = val, n.trees = 5000,type='response')
+bpred8 = predict(boostfit8, newdata = val, n.trees = 5000,type='response')
+```
+\
+**Evaluation of 8 different models**
+We then calculate the accuracy of all models on the validation set. According to the accuracy plot, the best result belongs to the fourth model with maximum depth of 4, 5000 trees, and shrinkage of 0.001.
+```{r, echo=FALSE, cache=TRUE}
 
+# FOR ANTONIO: preds_prob is the matrix holds all models probability prediction on val
+# ybin is the ture results from val
+preds_prob = cbind(bpred1,bpred2,bpred3,bpred4,bpred5,bpred6,bpred7,bpred8)
+preds = ifelse(preds_prob>0.5,1,0)
+ybin = as.factor(val$target)
 
+ac1<-confusionMatrix(as.factor(preds[,1]),ybin)$overall['Accuracy']
+ac2<-confusionMatrix(as.factor(preds[,2]),ybin)$overall['Accuracy']
+ac3<-confusionMatrix(as.factor(preds[,3]),ybin)$overall['Accuracy']
+ac4<-confusionMatrix(as.factor(preds[,4]),ybin)$overall['Accuracy']
+ac5<-confusionMatrix(as.factor(preds[,5]),ybin)$overall['Accuracy']
+ac6<-confusionMatrix(as.factor(preds[,6]),ybin)$overall['Accuracy']
+ac7<-confusionMatrix(as.factor(preds[,7]),ybin)$overall['Accuracy']
+ac8<-confusionMatrix(as.factor(preds[,8]),ybin)$overall['Accuracy']
 
+p = c(1:8)
+accuracy = c(ac1,ac2,ac3,ac4,ac5,ac6,ac7,ac8)
+plot(p,accuracy,main='Accuracy on the validation')
+```
 
+Now let us use the fourth model to fit the combined train and validation sets then predict on the test. As a result, we get accuracy of 74% which is pretty good on the test.
+```{r, echo = TRUE, cache = TRUE}
+boostfit = gbm(target~.,data = trainval ,distribution="bernoulli",
+interaction.depth = 4, n.trees = 5000,shrinkage = 0.001)
+boostvalpred = predict(boostfit, newdata = test, n.trees = 5000)
+pred_test = ifelse(boostvalpred>0.5,1,0)
 
+print('Boosting on the test:')
+confusionMatrix(as.factor(pred_test),as.factor(test$target))$overall['Accuracy']
 
-## Random Forests (Sinta)
+```
 
-## Bossting (Penny)
 
 
 ## Neural Nets
