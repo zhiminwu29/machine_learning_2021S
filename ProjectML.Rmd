@@ -1014,4 +1014,4 @@ cO = c("#000080","#791b19", "#DAA520", "#228B22", "#A9A9A9")
 
 
 ##7 Conclusion 
-
+## lgt, 64.5%, naive bayes, 65.2%,dt69.4%,  boosting = 73.6 percent, neural nets,  nnts, 72.6 %
